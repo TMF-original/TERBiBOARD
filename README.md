@@ -26,10 +26,6 @@ Eigenständiges Whiteboard nach dem Vorbild von Weitzboard, komplett neu geschri
 
 - **Als Website:** Ordner auf einen Webserver legen (z. B. GitHub Pages). Dann installierbar als App und offline nutzbar.
 - **Lokal:** `index.html` per Doppelklick öffnen funktioniert ebenfalls, nur ohne Installation/Offline-Cache.
-- **Release-Ordner:** `Weitzboarder\Release\` enthält immer den aktuellen, vollständigen Stand zum Hochladen auf GitHub (alle Dateien dieses Ordners plus `TERBiBOARD_Einzeldatei.html`).
-- **Einzeldatei für Android/Tablets:** `Weitzboarder\Einzeldatei\TERBiBOARD.html` (identisch mit `Release\TERBiBOARD_Einzeldatei.html`) enthält alles in einer Datei (ca. 2 MB: Code, KaTeX, PDF.js, Logo, Handbuch). Auf dem Gerät in Chrome öffnen. Wird bei jeder neuen Version aus diesem Ordner neu erzeugt (kein Service Worker, nicht installierbar).
-- **Auf GitHub Pages veröffentlichen:** öffentliches Repository anlegen (Benutzer- und Repo-Name ohne Klarnamen wählen, sie stehen in der Adresse), alle Dateien aus `Release\` hochladen (Add file → Upload files → Commit changes), dann Settings → Pages → *Deploy from a branch*, Branch `main`, Ordner `/ (root)`, Save. Nach 1–2 Minuten läuft das Board unter `https://BENUTZERNAME.github.io/REPONAME/`. Updates: geänderte Dateien erneut hochladen, im Browser Strg+F5.
-- Nach Änderungen an den Dateien in `sw.js` die `VERSION` hochzählen, damit installierte Apps aktualisieren.
 
 ## Neu gegenüber dem Fork
 
