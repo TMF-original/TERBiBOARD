@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<!-- TERBiBOARD · Copyright (C) 2026 DocTERBi (TERBi Teaching) · SPDX-License-Identifier: GPL-3.0-only · siehe LICENSE -->
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<title>TERBiBOARD</title>
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#186238">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="splash" role="presentation">
+  <div class="splash-in"><img class="splash-logo" src="logo.png" alt=""><svg viewBox="-30 -30 815 190" aria-hidden="true"><path class="sl a" pathLength="1" style="--i:0" transform="translate(0 0)" d="M0 0H60M30 0V100"/><path class="sl a" pathLength="1" style="--i:1" transform="translate(84 0)" d="M55 0H0V100H55M0 50H44"/><path class="sl a" pathLength="1" style="--i:2" transform="translate(163 0)" d="M0 100V0H33A25 25 0 0 1 33 50H0M28 50L58 100"/><path class="sl a" pathLength="1" style="--i:3" transform="translate(245 0)" d="M0 100V0H30A24 24 0 0 1 30 48H0M30 48A26 26 0 0 1 30 100H0"/><path class="sl a" pathLength="1" style="--i:4" transform="translate(327 0)" d="M4 46V100M4 20v0.5"/><path class="sl b" pathLength="1" style="--i:5" transform="translate(359 0)" d="M0 100V0H30A24 24 0 0 1 30 48H0M30 48A26 26 0 0 1 30 100H0"/><path class="sl b" pathLength="1" style="--i:6" transform="translate(441 0)" d="M31 0A31 50 0 0 0 31 100A31 50 0 0 0 31 0"/><path class="sl b" pathLength="1" style="--i:7" transform="translate(527 0)" d="M0 100L31 0L62 100M12 64H50"/><path class="sl b" pathLength="1" style="--i:8" transform="translate(613 0)" d="M0 100V0H33A25 25 0 0 1 33 50H0M28 50L58 100"/><path class="sl b" pathLength="1" style="--i:9" transform="translate(695 0)" d="M0 100V0H18A42 50 0 0 1 18 100H0"/><path class="sl u" pathLength="1" d="M-6 132C226 146 528 118 763 128"/></svg><div class="splash-sub">© TERBi Teaching ☺ · freie Bildungsressource (GPL-3.0)</div></div>
+</div>
+<script>
+/* Startanimation: Klick/Taste überspringt; im zweiten Fenster nicht zeigen */
+(function () {
+  var s = document.getElementById('splash');
+  if (!s) return;
+  if (location.hash === '#mirror') { s.remove(); return; }
+  var done = false;
+  function end(e) {
+    if (done) return; done = true;
+    if (e && e.type === 'keydown') { e.preventDefault(); e.stopPropagation(); }
+    s.classList.add('out');
+    setTimeout(function () { s.remove(); }, 380);
+    window.removeEventListener('keydown', end, true);
+  }
+  window.addEventListener('keydown', end, true);
+  s.addEventListener('pointerdown', end);
+  setTimeout(end, 6000);   // höchstens 6 s, Klick/Taste beendet früher
+})();
+</script>
+<nav id="panel" aria-label="Werkzeuge">
+  <div class="head">
+    <div class="brand"><img class="logo" src="logo.png" alt="TERBi Teaching"><span class="wordmark"><b>TERBi</b>BOARD</span></div>
+    <div class="headbtns" id="headBtns"><button id="collapse" class="hbtn" title="Panel ein-/ausklappen">‹</button></div>
+  </div>
+  <div class="scroll">
+    <div class="sec"><div class="title">Werkzeug</div><div id="tools" class="tools"></div></div>
+    <div class="sec">
+      <div class="title">Farbe &amp; Stärke</div>
+      <div id="colors" class="colors"></div>
+      <div id="widths" class="widths"></div>
+      <div id="wline" class="wline"></div>
+      <div id="fontRow" class="fontrow"></div>
+    </div>
+    <div id="quick" class="quick"></div>
+    <div id="groups"></div>
+  </div>
+</nav>
+
+<div id="container">
+  <svg id="board" xmlns="http://www.w3.org/2000/svg"></svg>
+</div>
+
+<div id="dlgHelp" class="dlg">
+  <div class="dlg-head">TERBiBOARD – Hilfe <button class="x">×</button></div>
+  <div class="dlg-body">
+    <p class="manual-link"><a id="manualLink" href="handbuch.html" target="_blank" rel="noopener">📖 Ausführliches Handbuch öffnen</a> – alle Funktionen Schritt für Schritt erklärt.</p>
+    <dl class="keys">
+      <dt>Leertaste</dt><dd>Zwischen Zeichnen und Auswahl wechseln</dd>
+      <dt>T</dt><dd>Text-Werkzeug: Klick setzt ein Textfeld (Formeln mit <code>$…$</code> bzw. <code>$$…$$</code>)</dd>
+      <dt>Strg+V</dt><dd>Aus der Zwischenablage einfügen: Bild → Bild, Text → neues Textfeld</dd>
+      <dt>Doppelklick</dt><dd>Textfeld bearbeiten (in Auswahl- oder Text-Werkzeug)</dd>
+      <dt>Strg+Enter / Esc</dt><dd>Textbearbeitung beenden</dd>
+      <dt>Z / Strg+Z</dt><dd>Rückgängig &nbsp;·&nbsp; <b>Y / Strg+Y</b>: Wiederholen</dd>
+      <dt>S / O</dt><dd>SVG speichern / öffnen (Shift+S: Speichern unter)</dd>
+      <dt>C / X / V</dt><dd>Auswahl kopieren, ausschneiden, einfügen</dd>
+      <dt>⌫ / Entf</dt><dd>Letztes Element bzw. Auswahl entfernen</dd>
+      <dt>E</dt><dd>Fläche nach unten verlängern (Strg+E: auf Inhalt kürzen)</dd>
+      <dt>P</dt><dd>Bild einfügen (Strg+P: Drucken / PDF)</dd>
+      <dt>H</dt><dd>Gerade bzw. waagerecht/senkrecht annähern</dd>
+      <dt>K</dt><dd>Kreisbogen annähern</dd>
+      <dt>R / L</dt><dd>90° im / gegen den Uhrzeigersinn drehen</dd>
+      <dt>F</dt><dd>Zweites Fenster öffnen (z. B. für den Beamer)</dd>
+      <dt>1–9, 0</dt><dd>Farbe wählen (1 = Schwarz, 0 = Weiß); wirkt auch auf die Auswahl</dd>
+      <dt>Textmarker</dt><dd>Dritte Stärke-Stufe (breiter, schräger Balken): halbtransparent, darunterliegende Schrift bleibt lesbar</dd>
+      <dt>+ / −</dt><dd>Strichstärke bzw. Schriftgröße der Auswahl ändern</dd>
+      <dt>G</dt><dd>Schreibgitter: aus → Linien → Karos (wird nicht gedruckt/gespeichert)</dd>
+      <dt>I</dt><dd>PDF-Seiten importieren (Seiten auswählen, je Seite linke Hälfte)</dd>
+      <dt>Format</dt><dd>Panel „Seite → Format“: Druck im Hoch- oder Querformat. Gestrichelte Linien zeigen die echten Seitenumbrüche; Umbrüche weichen Bildern, Texten und Strichen nach oben aus.</dd>
+      <dt>A</dt><dd>Für Druck anordnen: Blöcke, die ein Umbruch schneiden würde, rutschen auf die nächste Seite; leicht zu hohe Blöcke (bis 150 %) werden eingepasst. Passiert beim Formatwechsel automatisch.</dd>
+      <dt>U</dt><dd>Fester Umbruch: Klick setzt eine rote Umbruchlinie, Klick auf eine vorhandene entfernt sie</dd>
+      <dt>D</dt><dd>Linienradierer: löscht nur Striche, nie Texte, Bilder oder PDF-Seiten (Stift-Radiertaste wirkt immer so)</dd>
+      <dt>Shift+D</dt><dd>Objektradierer: löscht nur Textfelder, Bilder und PDF-Seiten, nie Striche</dd>
+      <dt>2. Fenster</dt><dd>Taste F oder Panel „Extras → Zweites Fenster“ öffnet TERBiBOARD noch einmal (z. B. für den Beamer). Beide Fenster sind live gekoppelt und bearbeitbar. „Scrollen koppeln“ (beim Öffnen automatisch an) lässt beide Fenster immer dieselbe Stelle oben links zeigen – egal in welchem gescrollt wird. Rückgängig gilt für den gemeinsamen Stand.</dd>
+      <dt>Fremde SVG</dt><dd>Öffnen (O) oder Hineinziehen wandelt Linien, Pfade und Formen in bearbeitbare Striche um, &lt;text&gt; in Textfelder (mit $…$-Formeln). Auf leerem Board wird sie zum Tafelbild in voller Breite. Als unveränderliches Bild: „Bild einfügen“ (P).</dd>
+      <dt>Text ziehen</dt><dd>Im Text-Werkzeug ein Feld aufziehen: feste Breite, der Text bricht automatisch um. Bei ausgewähltem Textfeld ändern die runden Seitengriffe die Breite.</dd>
+      <dt>J</dt><dd>JavaScript-Rechner</dd>
+      <dt>SVG-Code</dt><dd>Panel „Datei → SVG-Code“: zeigt den Code des Tafelbilds zum Ansehen und Kopieren (klein oder vollständig bearbeitbar)</dd>
+      <dt>B</dt><dd>Backups anzeigen (Strg+B: Backup jetzt)</dd>
+      <dt>Esc / Q</dt><dd>Schließen / Beenden</dd>
+      <dt>F1</dt><dd>Diese Hilfe</dd>
+    </dl>
+    <p class="small">H, K, R und L sowie „Glätten“ (Menü „Auswahl bearbeiten“) wirken auf den letzten Strich oder die Auswahl und lassen sich mehrfach anwenden.
+    Bild↑/↓, Pos1/Ende und Pfeiltasten scrollen, bei Auswahl verschieben die Pfeiltasten. Eckgriffe skalieren proportional, runde Seitengriffe frei.
+    Mit dem Finger wird gescrollt, außer „Finger zeichnet“ ist aktiv.</p>
+    <div class="imprint">
+      <img src="logo.png" alt="TERBi Teaching" class="imp-logo">
+      <div>
+        <b>TERBiBOARD</b> · © 2026 DocTERBi (TERBi Teaching)<br>
+        Freie Bildungsressource unter der <b>GNU General Public License v3.0</b> (GPL-3.0):
+        Jede und jeder darf das Board nutzen, kopieren, verändern und weitergeben – auch im Unterricht und an Schulen –,
+        sofern die Herkunft genannt wird und veränderte Fassungen ebenfalls unter der GPL-3.0 mit Quelltext weitergegeben werden.
+        Ohne Gewährleistung. Lizenztext: Datei <code>LICENSE</code> im Programmordner.<br>
+        Name und Logo „TERBi Teaching“ sind von der Lizenz ausgenommen.<br>
+        Eigenständige Neuentwicklung nach dem Vorbild von Weitzboard – herzlichen Dank an Prof. Dr. Edmund Weitz für die Inspiration.
+        Enthält KaTeX (MIT-Lizenz) und PDF.js (Apache-2.0), siehe <code>THIRD-PARTY-LICENSES.txt</code>.
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="dlgCalc" class="dlg">
+  <div class="dlg-head">JavaScript-Rechner <button class="x">×</button></div>
+  <div class="dlg-body">
+    <textarea id="calcIn" rows="8" spellcheck="false">a = 3*sin(PI/2), a*14</textarea>
+    <div id="calcOut" class="calc-out">–</div>
+    <div class="row"><button id="calcRun">Berechnen (Strg+Enter)</button><button id="calcInsert">Ergebnis als Text einfügen</button></div>
+    <p class="small">Alle Funktionen aus <code>Math</code> direkt nutzbar (sin, PI, sqrt …).</p>
+  </div>
+</div>
+
+<div id="dlgSvg" class="dlg wide">
+  <div class="dlg-head">SVG-Code des Tafelbilds <button class="x">×</button></div>
+  <div class="dlg-body">
+    <div class="row svg-bar">
+      <span id="svgCodeMode" class="seg"><button data-full="0">Klein</button><button data-full="1">Vollständig (bearbeitbar)</button></span>
+      <span class="spacer"></span>
+      <button id="svgCodeCopy" class="primary">Kopieren</button>
+    </div>
+    <textarea id="svgCodeOut" readonly spellcheck="false" wrap="off"></textarea>
+    <p id="svgCodeInfo" class="small"></p>
+    <p class="small">„Klein“ entspricht <i>Export klein</i> (zum Weitergeben, z. B. in Dokumente oder an eine KI). „Vollständig“ entspricht der gespeicherten Datei und lässt sich in TERBiBOARD wieder öffnen und bearbeiten. Das Schreibgitter ist nie enthalten.</p>
+  </div>
+</div>
+
+<div id="dlgBackup" class="dlg">
+  <div class="dlg-head">Aus Backup laden <button class="x">×</button></div>
+  <div class="dlg-body"><div id="backupList" class="backups"></div>
+  <p class="small">Backups werden automatisch alle 2 Minuten im Browser angelegt (die letzten 12).</p></div>
+</div>
+
+<div id="dlgPdf" class="dlg wide">
+  <div class="dlg-head"><span id="pdfTitle">PDF-Seiten importieren</span> <button class="x">×</button></div>
+  <div class="dlg-body">
+    <div class="row pdf-bar">
+      <button id="pdfAll">Alle</button><button id="pdfNone">Keine</button>
+      <input id="pdfRange" placeholder="z. B. 1-3, 5" size="12" title="Seitenbereich eingeben und Enter drücken">
+      <span id="pdfCount" class="small"></span>
+      <span class="spacer"></span>
+      <button id="pdfGo" class="primary">Importieren</button>
+    </div>
+    <div id="pdfThumbs" class="thumbs"></div>
+    <p class="small">Jede gewählte Seite wird unten angehängt und belegt die linke Hälfte der Breite; die Fläche wird dafür verlängert.</p>
+  </div>
+</div>
+
+<div id="toast"></div>
+<div id="printArea"></div>
+<input type="file" id="imgInput" accept="image/png,image/jpeg,image/gif,image/webp,image/svg+xml,.svg" hidden>
+<input type="file" id="pdfInput" accept="application/pdf,.pdf" hidden>
+<input type="file" id="svgInput" accept=".svg,image/svg+xml" hidden>
+
+<script src="katex.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
