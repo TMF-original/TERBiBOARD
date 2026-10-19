@@ -3,7 +3,7 @@
 Eigenständiges Whiteboard nach dem Vorbild von Weitzboard, komplett neu geschrieben (kein Original-Code).
 © 2026 DocTERBi (TERBi Teaching) ☺ · freie Bildungsressource unter der **GNU General Public License v3.0** (`GPL-3.0-only`, siehe `LICENSE`).
 
-**Dank:** Ein herzliches Dankeschön an **Prof. Dr. Edmund Weitz**, dessen Weitzboard Vorbild und Inspiration für TERBiBOARD war. Ohne seine Idee eines schlanken, browserbasierten Tafelprogramms gäbe es dieses Board nicht.
+**Dank:** Ein herzliches Dankeschön an **Prof. Dr. Edmund Weitz**, dessen Weitzboard Vorbild und Inspiration für TERBiBOARD war. 
 
 **Handbuch:** `handbuch.html` (im Board über Hilfe F1 → „Ausführliches Handbuch öffnen“).
 
