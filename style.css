@@ -175,3 +175,14 @@ textarea.wbedit{position:absolute;left:0;top:0;margin:0;border:1px dashed #18623
 @keyframes wbFade{to{opacity:1}}
 @media (prefers-reduced-motion: reduce){#splash .sl,#splash .splash-sub,#splash .splash-logo{animation:none;stroke-dashoffset:0;opacity:1;transform:none}}
 @media print{#splash{display:none!important}}
+
+/* v9.0: Bildgröße beim Einfügen, Qualitätswahl beim PDF-Import */
+.seg button+button{border-left:0}
+.pdf-bar .seg button{padding:4px 8px}
+.imgopts{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:6px;margin:8px 0}
+.imgopt{display:flex;flex-direction:column;align-items:flex-start;gap:2px;padding:8px;border:1px solid #c9d8bb;border-radius:6px;background:#fff;cursor:pointer;text-align:left;font:inherit;color:#1c2b20}
+.imgopt span{font-size:11px;color:#555}.imgopt .sz{font-weight:600;color:#186238}
+.imgopt.on{border-color:#186238;box-shadow:inset 0 0 0 2px #186238;background:#eef6e6}
+.img-bar{align-items:center;margin:8px 0}.img-bar .spacer{flex:1}
+.img-bar button{padding:4px 12px;cursor:pointer}.img-bar .primary{background:#186238;color:#fff;border:1px solid #0f4a29;border-radius:4px}
+.chk{display:flex;gap:6px;align-items:center}

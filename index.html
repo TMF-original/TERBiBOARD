@@ -75,6 +75,8 @@
       <dt>⌫ / Entf</dt><dd>Letztes Element bzw. Auswahl entfernen</dd>
       <dt>E</dt><dd>Fläche nach unten verlängern (Strg+E: auf Inhalt kürzen)</dd>
       <dt>P</dt><dd>Bild einfügen (Strg+P: Drucken / PDF)</dd>
+      <dt>Bildgröße</dt><dd>Bei großen Bildern fragt TERBiBOARD beim Einfügen nach der Größe (Original / Groß / Mittel / Klein) und zeigt die Dateigröße dazu. Panel „Einfügen → Bildgröße“ legt eine feste Stufe fest oder schaltet die Abfrage wieder ein. Fotos werden als JPEG, Bilder mit Transparenz als PNG gespeichert.</dd>
+      <dt>Bilder verkleinern</dt><dd>Panel „Einfügen → Bilder verkleinern“: rechnet alle Bilder und PDF-Seiten auf ihre angezeigte Größe herunter (doppelte Auflösung für scharfen Druck), auch in älteren Boards; mit Z rückgängig. Mehrfach eingefügte Bilder stehen in der Datei nur einmal.</dd>
       <dt>H</dt><dd>Gerade bzw. waagerecht/senkrecht annähern</dd>
       <dt>K</dt><dd>Kreisbogen annähern</dd>
       <dt>R / L</dt><dd>90° im / gegen den Uhrzeigersinn drehen</dd>
@@ -155,10 +157,24 @@
       <input id="pdfRange" placeholder="z. B. 1-3, 5" size="12" title="Seitenbereich eingeben und Enter drücken">
       <span id="pdfCount" class="small"></span>
       <span class="spacer"></span>
+      <span class="small">Qualität:</span>
+      <span id="pdfQ" class="seg" title="Auflösung der importierten Seiten – kleiner heißt kleinere Datei"><button data-q="high">Hoch</button><button data-q="medium">Mittel</button><button data-q="small">Klein</button></span>
       <button id="pdfGo" class="primary">Importieren</button>
     </div>
     <div id="pdfThumbs" class="thumbs"></div>
-    <p class="small">Jede gewählte Seite wird unten angehängt und belegt die linke Hälfte der Breite; die Fläche wird dafür verlängert.</p>
+    <p class="small">Jede gewählte Seite wird unten angehängt und belegt die linke Hälfte der Breite; die Fläche wird dafür verlängert.
+    Qualität: „Mittel“ reicht für Beamer und Druck meist aus, „Hoch“ nur bei sehr kleiner Schrift, „Klein“ für möglichst kleine Dateien.</p>
+  </div>
+</div>
+
+<div id="dlgImg" class="dlg">
+  <div class="dlg-head">Bild einfügen – Größe wählen <button class="x">×</button></div>
+  <div class="dlg-body">
+    <p id="imgInfo" class="small"></p>
+    <div id="imgOpts" class="imgopts"></div>
+    <label class="small chk"><input type="checkbox" id="imgRemember"> Auswahl merken und nicht mehr fragen (änderbar unter „Einfügen → Bildgröße“)</label>
+    <div class="row img-bar"><span class="spacer"></span><button id="imgCancel">Abbrechen</button><button id="imgGo" class="primary">Einfügen</button></div>
+    <p class="small">Für Beamer und Druck reicht meist „Mittel“. Die Anzeigegröße auf der Tafel ist bei allen Stufen gleich – nur die Datei wird kleiner.</p>
   </div>
 </div>
 

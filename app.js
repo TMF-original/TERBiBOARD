@@ -17,7 +17,7 @@
 
 // ===================================================================== Grundlagen
 const NS = 'http://www.w3.org/2000/svg', XH = 'http://www.w3.org/1999/xhtml';
-const VERSION = '2026-10-19a';
+const VERSION = '2026-10-20a';
 const COLORS = ['#FFFFFF','#000000','#DDDDDD','#CC6677','#882255','#117733','#88CCEE','#332288','#999933','#DDCC77'];
 const TEXT_FONT = 'system-ui,"Segoe UI",Arial,sans-serif';
 const $ = id => document.getElementById(id);
@@ -711,15 +711,154 @@ function insertText(txt, at) {
 function readAsDataURL(file) {
   return new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(file); });
 }
+// v9.0: Rasterbilder werden beim Einfügen auf Wunsch verkleinert und passend kodiert
+// (Bilder mit Transparenz -> PNG, sonst die kleinere Fassung aus JPEG und PNG). Nie größer als das Original.
+const IMG_TIERS = [['orig', 'Original', 0], ['large', 'Groß', 1920], ['medium', 'Mittel', 1280], ['small', 'Klein', 800]];
+const IMGQ_LABEL = { ask: 'Bildgröße: fragen', orig: 'Bildgröße: Original', large: 'Bildgröße: groß', medium: 'Bildgröße: mittel', small: 'Bildgröße: klein' };
+const IMGQ_CYCLE = ['ask', 'medium', 'large', 'small', 'orig'];
+const IMG_JPEG_Q = .82;
+const isRasterHref = h => /^data:image\/(png|jpe?g|webp|bmp)/i.test(h);
+const fmtSize = n => n >= 1048576 ? (n / 1048576).toFixed(1).replace('.', ',') + ' MB' : Math.max(1, Math.round(n / 1024)) + ' KB';
+const nextFrame = () => new Promise(r => setTimeout(r, 0));
+const imgDims = b => [b.naturalWidth || b.width, b.naturalHeight || b.height];
+let imgPref = 'ask', imgLast = 'medium', imgDlgDone = null;
+try { const v = localStorage.getItem('wb2.imgq'); if (IMGQ_LABEL[v]) imgPref = v; } catch (e) {}
+function setImgPref(k) { imgPref = k; try { localStorage.setItem('wb2.imgq', k); } catch (e) {} syncPanel(); }
+function cycleImgPref() {
+  setImgPref(IMGQ_CYCLE[(IMGQ_CYCLE.indexOf(imgPref) + 1) % IMGQ_CYCLE.length]);
+  toast(IMGQ_LABEL[imgPref] + (imgPref === 'ask' ? ' (Abfrage beim Einfügen)' : ' – gilt für alle neu eingefügten Bilder'), 2000);
+}
+async function decodeImage(src) {               // src: Blob/File oder data-URL
+  const blob = typeof src === 'string' ? await (await fetch(src)).blob() : src;
+  if (window.createImageBitmap) { try { return await createImageBitmap(blob); } catch (e) { /* Ersatzweg */ } }
+  const url = URL.createObjectURL(blob), img = new Image();
+  await new Promise((res, rej) => { img.onload = res; img.onerror = rej; img.src = url; });
+  setTimeout(() => URL.revokeObjectURL(url), 10000);
+  return img;
+}
+function recodeImage(bmp, maxPx) {              // -> { href, w, h }
+  const [w0, h0] = imgDims(bmp), f = maxPx ? Math.min(1, maxPx / Math.max(w0, h0)) : 1;
+  const w = Math.max(1, Math.round(w0 * f)), h = Math.max(1, Math.round(h0 * f));
+  const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+  const ctx = cv.getContext('2d', { willReadFrequently: true });
+  ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(bmp, 0, 0, w, h);
+  const png = cv.toDataURL('image/png'), d = ctx.getImageData(0, 0, w, h).data;
+  for (let i = 3; i < d.length; i += 4) if (d[i] < 255) return { href: png, w, h };   // Transparenz -> PNG
+  const jpg = cv.toDataURL('image/jpeg', IMG_JPEG_Q);
+  return { href: jpg.length < png.length ? jpg : png, w, h };
+}
+async function imageTier(bmp, orig, key) {
+  const t = IMG_TIERS.find(x => x[0] === key) || IMG_TIERS[2];
+  if (!t[2]) return { href: orig };
+  await nextFrame();
+  try { const r = recodeImage(bmp, t[2]); return r.href.length < orig.length ? r : { href: orig }; }
+  catch (err) { return { href: orig }; }
+}
+function askImageSize(bmp, orig) {             // Dialog „Bild einfügen – Größe“; liefert {href} oder null (abgebrochen)
+  if (imgDlgDone) imgDlgDone(null);
+  return new Promise(resolve => {
+    const [w0, h0] = imgDims(bmp), big = Math.max(w0, h0), tiers = [], seen = new Set();
+    for (const [k, lab, max] of IMG_TIERS) {   // Stufen oberhalb der Originalgröße zu einer zusammenfassen
+      const px = max ? Math.min(max, big) : big;
+      if (max) { if (seen.has(px)) continue; seen.add(px); }
+      tiers.push([k, lab, px]);
+    }
+    let pick = tiers.some(t => t[0] === imgLast) ? imgLast : tiers[Math.min(1, tiers.length - 1)][0], finished = false;
+    const box = $('imgOpts'), res = {}; let chain = Promise.resolve();
+    box.textContent = '';
+    const mark = () => box.querySelectorAll('.imgopt').forEach(b => b.classList.toggle('on', b.dataset.k === pick));
+    const finish = r => { if (finished) return; finished = true; imgDlgDone = null; $('dlgImg').classList.remove('open'); resolve(r); };
+    const go = async () => {
+      if (finished) return;
+      const k = pick; imgLast = k;
+      if ($('imgRemember').checked) setImgPref(k);
+      $('imgGo').disabled = true; $('imgGo').textContent = 'Berechne …';
+      const r = await res[k];
+      $('imgGo').disabled = false; $('imgGo').textContent = 'Einfügen';
+      finish(r);
+    };
+    for (const [k, lab, px] of tiers) {
+      const b = document.createElement('button'); b.type = 'button'; b.className = 'imgopt'; b.dataset.k = k;
+      const ph = Math.max(1, Math.round(px * Math.min(w0, h0) / big));
+      const dim = w0 >= h0 ? `${px} × ${ph} px` : `${ph} × ${px} px`;
+      b.innerHTML = `<b>${lab}</b><span>${dim}${k !== 'orig' && px === big ? ' · nur Format' : ''}</span><span class="sz">${k === 'orig' ? fmtSize(orig.length) : '…'}</span>`;
+      b.addEventListener('click', () => { pick = k; mark(); });
+      b.addEventListener('dblclick', () => { pick = k; mark(); go(); });
+      box.appendChild(b);
+      res[k] = chain = chain.then(() => finished && k !== pick ? { href: orig } : imageTier(bmp, orig, k)).then(r => {
+        if (k !== 'orig') b.querySelector('.sz').textContent = r.href === orig ? fmtSize(orig.length) + ' (= Original)'
+          : `${fmtSize(r.href.length)} (−${Math.round(100 - r.href.length / orig.length * 100)} %)`;
+        return r;
+      });
+    }
+    mark();
+    $('imgInfo').textContent = `Originalbild: ${w0} × ${h0} px · ${fmtSize(orig.length)} in der Datei`;
+    $('imgRemember').checked = false;
+    $('imgGo').onclick = go; $('imgCancel').onclick = () => finish(null);
+    imgDlgDone = finish;
+    openDialog('dlgImg'); setTimeout(() => $('imgGo').focus(), 0);
+  });
+}
+new MutationObserver(() => { if (imgDlgDone && !$('dlgImg').classList.contains('open')) imgDlgDone(null); })
+  .observe($('dlgImg'), { attributes: true, attributeFilter: ['class'] });
+
 async function insertImageFile(file) {
-  const href = await readAsDataURL(file);
-  const img = new Image();
-  await new Promise((res, rej) => { img.onload = res; img.onerror = rej; img.src = href; });
+  const orig = await readAsDataURL(file);
+  let href = orig, dims;
+  if (isRasterHref(orig)) {
+    const bmp = await decodeImage(file);
+    dims = imgDims(bmp);
+    let r;
+    if (Math.max(...dims) <= 800 && orig.length < 200 * 1024) {     // kleines Bild: nicht fragen, nur Format prüfen
+      await nextFrame();
+      try { const c = recodeImage(bmp, 0); r = c.href.length < orig.length * .9 ? c : { href: orig }; } catch (err) { r = { href: orig }; }
+    } else if (imgPref !== 'ask') {
+      toast('Bild wird verkleinert …', 20000);
+      r = await imageTier(bmp, orig, imgPref);
+      toast(r.href === orig ? 'Bild eingefügt' : `Bild verkleinert: ${fmtSize(orig.length)} → ${fmtSize(r.href.length)}`, 2200);
+    } else r = await askImageSize(bmp, orig);
+    if (!r) return;                                                  // Dialog abgebrochen
+    href = r.href;
+  } else {
+    const img = new Image();
+    await new Promise((res, rej) => { img.onload = res; img.onerror = rej; img.src = href; });
+    dims = [img.naturalWidth, img.naturalHeight];
+  }
   const v = viewRect();
-  let w = img.naturalWidth || 300, h = img.naturalHeight || 200;
+  let w = dims[0] || 300, h = dims[1] || 200;                        // Anzeigegröße wie beim Original
   const f = Math.min(1, (W * .6) / w, (v.h * .7) / h); w *= f; h *= f;
   const p = textAt();
   insertAndSelect([{ id: nid(), t: 'i', x: r1(clamp(p.x, 0, W - w)), y: r1(p.y), w: r1(w), h: r1(h), href }]);
+}
+// v9.0: alle Bilder auf ihre angezeigte Größe herunterrechnen (×2 für scharfen Druck/Beamer); rückgängig machbar
+async function optimizeImages() {
+  if (editing) commitEdit();
+  const list = els.filter(e => e.t === 'i' && isRasterHref(e.href));
+  if (!list.length) return toast('Keine Bilder im TERBiBOARD');
+  const groups = new Map();                     // gleiches Bild nur einmal rechnen (größte Anzeige zählt)
+  for (const e of list) groups.set(e.href, Math.max(groups.get(e.href) || 0, Math.max(400, Math.ceil(Math.max(e.w, e.h) * 2))));
+  const repl = new Map(); let before = 0, after = 0, k = 0;
+  for (const [href, target] of groups) {
+    toast(`Prüfe Bild ${++k} von ${groups.size} …`, 60000);
+    before += href.length; let out = href;
+    try {
+      const bmp = await decodeImage(href), big = Math.max(...imgDims(bmp));
+      if (big > target * 1.1 || /^data:image\/png/i.test(href)) {
+        await nextFrame();
+        const r = recodeImage(bmp, Math.min(target, big));
+        if (r.href.length < href.length * .85) out = r.href;
+      }
+    } catch (err) { /* Bild unverändert lassen */ }
+    after += out.length; if (out !== href) repl.set(href, out);
+  }
+  if (!repl.size) return toast('Die Bilder sind bereits passend verkleinert', 2500);
+  toast('', 1);
+  if (!confirm(`${repl.size} von ${groups.size} Bild(ern) verkleinern?\n\nBilder insgesamt: ${fmtSize(before)} → ${fmtSize(after)}\n\n`
+    + 'Die Bilder werden auf ihre angezeigte Größe heruntergerechnet (doppelte Auflösung für scharfen Druck). '
+    + 'Mit Z lässt sich das rückgängig machen, solange das Board offen ist.')) return;
+  change(els.map(e => e.t === 'i' && repl.has(e.href) ? { ...e, href: repl.get(e.href) } : e));
+  toast(`Bilder verkleinert: ${fmtSize(before)} → ${fmtSize(after)}`, 2500);
 }
 
 // ===================================================================== Zeiger
@@ -962,7 +1101,7 @@ const ACTIONS = {
   selUp: () => bigger(1.15), selDown: () => bigger(1 / 1.15),
   extend: () => change(els, Math.ceil(H + cont.clientHeight / scale() * .5)),
   clip: clipPage,
-  image: () => $('imgInput').click(),
+  image: () => $('imgInput').click(), imgq: cycleImgPref, optimg: optimizeImages,
   grid: cycleGrid, fmt: toggleFormat, arrange: arrangeForPrint, pbreak: () => setMode(mode === 'pbreak' ? 'draw' : 'pbreak'), pdf: () => $('pdfInput').click(),
   print: doPrint,
   newb: newBoard, open: openFile, save: () => save(false), saveAs: () => save(true), compact: exportCompact, svgcode: showSvgCode,
@@ -985,7 +1124,8 @@ const GROUPS = [
   ['sel', 'Auswahl bearbeiten', [['copy', '⧉', 'Kopieren'], ['cut', '✂', 'Ausschneiden'], ['all', '▣', 'Alles auswählen'],
       ['straight', '╱', 'Gerade'], ['arc', '◠', 'Kreisbogen'], ['flat', '〰', 'Glätten'],
       ['rotR', '↻', 'Drehen rechts'], ['rotL', '↺', 'Drehen links'], ['selUp', '⤢', 'Größer'], ['selDown', '⤡', 'Kleiner']]],
-  ['ins', 'Einfügen', [['paste', '📋', 'Aus Zwischenablage'], ['image', '🖼', 'Bild'], ['pdf', '📄', 'PDF-Seiten']]],
+  ['ins', 'Einfügen', [['paste', '📋', 'Aus Zwischenablage'], ['image', '🖼', 'Bild'], ['pdf', '📄', 'PDF-Seiten'],
+      ['imgq', '⚖', 'Bildgröße: fragen'], ['optimg', '🗜', 'Bilder verkleinern']]],
   ['page', 'Seite & Druck', [['grid', '▦', 'Gitter: aus'], ['fmt', '▯', 'Format: Hoch'], ['extend', '⇣', 'Verlängern'], ['clip', '⇡', 'Auf Inhalt kürzen'],
       ['arrange', '⇅', 'Für Druck anordnen'], ['pbreak', '⤓', 'Fester Umbruch'], ['print', '⎙', 'Drucken / PDF']]],
   ['file', 'Datei', [['newb', '✦', 'Neu'], ['saveAs', '⇲', 'Speichern unter'], ['compact', '⇩', 'Export klein'], ['svgcode', '&lt;/&gt;', 'SVG-Code'],
@@ -1102,6 +1242,8 @@ function syncPanel() {
   });
   const gb = document.querySelector('[data-act=grid]');
   if (gb) { gb.querySelector('.lab').textContent = GRID_LABEL[grid]; gb.classList.toggle('active', grid !== 'off'); }
+  const ib = document.querySelector('[data-act=imgq]');
+  if (ib) { ib.querySelector('.lab').textContent = IMGQ_LABEL[imgPref]; ib.classList.toggle('active', imgPref !== 'ask'); }
   const fb = document.querySelector('[data-act=fmt]');
   if (fb) { fb.querySelector('.lab').textContent = FMT_LABEL[pageFmt]; fb.querySelector('.ico').textContent = pageFmt === 'landscape' ? '▭' : '▯'; }
   const fv = $('fontVal'); if (fv) fv.textContent = fontSize;
@@ -1235,6 +1377,29 @@ function freshSize() {
 }
 
 // ===================================================================== Speichern / Laden
+// v9.0: Ein mehrfach verwendetes Bild steht nur einmal in der Datei (<symbol> in <defs>, Verwendungen als <use>)
+function dedupeImages(c) {
+  const imgs = [...c.querySelectorAll('#ink > image')], count = new Map(), ids = new Map();
+  for (const n of imgs) { const h = n.getAttribute('href'); count.set(h, (count.get(h) || 0) + 1); }
+  let defs = null;
+  for (const n of imgs) {
+    const h = n.getAttribute('href'); if (count.get(h) < 2) continue;
+    if (!ids.has(h)) {
+      if (!defs) { defs = mk('defs'); c.insertBefore(defs, c.firstChild); }
+      const id = 'im' + ids.size; ids.set(h, id);
+      const s = mk('symbol', { id, viewBox: '0 0 1 1', preserveAspectRatio: 'none' }, defs);
+      mk('image', { width: 1, height: 1, preserveAspectRatio: 'none', href: h }, s);
+    }
+    const u = mk('use', { href: '#' + ids.get(h) });
+    for (const a of ['class', 'x', 'y', 'width', 'height']) if (n.hasAttribute(a)) u.setAttribute(a, n.getAttribute(a));
+    n.replaceWith(u);
+  }
+}
+function sharedImageHref(root, ref) {           // href des Bildes, auf das ein <use href="#…"> zeigt
+  const t = root.querySelector(`[id="${ref.slice(1).replace(/["\\]/g, '')}"]`);
+  const im = t && (t.localName === 'image' ? t : t.querySelector('image'));
+  return im ? (im.getAttribute('href') || im.getAttributeNS('http://www.w3.org/1999/xlink', 'href') || '') : '';
+}
 function serialize(compact) {
   if (editing) commitEdit();
   const c = svg.cloneNode(true);
@@ -1243,6 +1408,7 @@ function serialize(compact) {
   c.removeAttribute('style'); c.removeAttribute('id');
   c.setAttribute('width', W); c.setAttribute('height', H); c.setAttribute('viewBox', `0 0 ${W} ${H}`);
   c.querySelectorAll('[style]').forEach(n => { if (n.namespaceURI === NS) n.removeAttribute('style'); });
+  dedupeImages(c);
   if (!compact) {
     c.setAttribute('data-wb2', VERSION); c.setAttribute('data-fmt', pageFmt);
     if (mb.length) c.setAttribute('data-breaks', mb.join(','));
@@ -1276,6 +1442,7 @@ function parseBoard(text) {
   const w = vb[2] || +root.getAttribute('width') || 1200, h = vb[3] || +root.getAttribute('height') || 800;
   const out = [];
   const num = (n, a, d = 0) => { const v = parseFloat(n.getAttribute(a)); return isFinite(v) ? v : d; };
+  const shared = new Map();
   for (const n of root.querySelectorAll('#ink > *, #txt > *')) {
     const cl = n.getAttribute('class');
     if (cl === 's') {
@@ -1283,7 +1450,8 @@ function parseBoard(text) {
       if (pts.length) { const st = { id: nid(), t: 's', pts, c: n.getAttribute('fill') || '#000000', w: num(n, 'data-w', 3) };
         if (n.getAttribute('data-hl') === '1') st.hl = 1; out.push(st); }
     } else if (cl === 'i') {
-      const href = n.getAttribute('href') || n.getAttributeNS('http://www.w3.org/1999/xlink', 'href') || '';
+      let href = n.getAttribute('href') || n.getAttributeNS('http://www.w3.org/1999/xlink', 'href') || '';
+      if (href[0] === '#') { if (!shared.has(href)) shared.set(href, sharedImageHref(root, href)); href = shared.get(href); }
       if (/^data:image\//.test(href)) out.push({ id: nid(), t: 'i', x: num(n, 'x'), y: num(n, 'y'), w: num(n, 'width', 100), h: num(n, 'height', 100), href });
     } else if (cl === 't') {
       const t = { id: nid(), t: 't', x: num(n, 'x'), y: num(n, 'y'), s: num(n, 'data-s', 28), c: n.getAttribute('data-c') || '#000000', txt: n.getAttribute('data-txt') || '' };
@@ -1393,6 +1561,15 @@ function importVectorSVG(text, name) {
     for (const el of tmp.querySelectorAll('image')) {
       if (skip(el)) continue;
       const href = el.getAttribute('href') || el.getAttributeNS('http://www.w3.org/1999/xlink', 'href') || '';
+      if (!/^data:image\/(png|jpe?g|gif|webp)/.test(href)) continue;
+      const b = el.getBBox(), a = toBoard(el, b.x, b.y), z = toBoard(el, b.x + b.width, b.y + b.height);
+      out.push({ id: nid(), t: 'i', x: r1(Math.min(a[0], z[0])), y: r1(Math.min(a[1], z[1])), w: r1(Math.abs(z[0] - a[0])), h: r1(Math.abs(z[1] - a[1])), href });
+    }
+    for (const el of tmp.querySelectorAll('use')) {           // v9.0: mehrfach verwendete Bilder (z. B. aus „Export klein“)
+      if (skip(el)) continue;
+      const ref = el.getAttribute('href') || el.getAttributeNS('http://www.w3.org/1999/xlink', 'href') || '';
+      if (ref[0] !== '#') continue;
+      const href = sharedImageHref(tmp, ref);
       if (!/^data:image\/(png|jpe?g|gif|webp)/.test(href)) continue;
       const b = el.getBBox(), a = toBoard(el, b.x, b.y), z = toBoard(el, b.x + b.width, b.y + b.height);
       out.push({ id: nid(), t: 'i', x: r1(Math.min(a[0], z[0])), y: r1(Math.min(a[1], z[1])), w: r1(Math.abs(z[0] - a[0])), h: r1(Math.abs(z[1] - a[1])), href });
@@ -1575,9 +1752,10 @@ function showSvgCode() {
   ta.value = svgCodeText.length > SVG_SHOW_MAX
     ? svgCodeText.slice(0, SVG_SHOW_MAX) + '\n\n… (Anzeige gekürzt – „Kopieren“ übernimmt den vollständigen Code)'
     : svgCodeText;
-  const pics = (svgCodeText.match(/<image\b/g) || []).length;
+  const pics = (svgCodeText.match(/<image\b/g) || []).length, uses = (svgCodeText.match(/<use\b/g) || []).length;
   $('svgCodeInfo').textContent = `${kb(size)} · ` + (svgCodeFull ? 'vollständig, in TERBiBOARD wieder bearbeitbar' : 'klein, ohne Bearbeitungsdaten')
-    + (pics ? ` · enthält ${pics} eingebettete(s) Bild(er)/PDF-Seite(n) als Base64` : '');
+    + (pics ? ` · enthält ${pics} eingebettete(s) Bild(er)/PDF-Seite(n) als Base64` : '')
+    + (uses ? ` (${uses} weitere Verwendung(en) mehrfach eingefügter Bilder, nur einmal gespeichert)` : '');
   document.querySelectorAll('#svgCodeMode button').forEach(b => b.classList.toggle('on', (b.dataset.full === '1') === svgCodeFull));
   openDialog('dlgSvg');
   ta.scrollTop = 0; ta.scrollLeft = 0;
@@ -1597,6 +1775,15 @@ $('svgCodeCopy').addEventListener('click', copySvgCode);
 
 // ===================================================================== PDF-Import
 let pdfDoc = null, pdfSel = new Set(), pdfToken = 0;
+// v9.0: Qualität der importierten Seiten – [max. Pixelbreite, Faktor zur Anzeigebreite, JPEG-Qualität]; „Hoch“ = bisheriges Verhalten
+const PDF_Q = { high: [1800, 2.5, .85], medium: [1300, 1.8, .8], small: [900, 1.25, .72] };
+let pdfQ = 'medium';
+try { const v = localStorage.getItem('wb2.pdfq'); if (PDF_Q[v]) pdfQ = v; } catch (e) {}
+function pdfQSync() { document.querySelectorAll('#pdfQ button').forEach(b => b.classList.toggle('on', b.dataset.q === pdfQ)); }
+document.querySelectorAll('#pdfQ button').forEach(b => b.addEventListener('click', () => {
+  pdfQ = b.dataset.q; try { localStorage.setItem('wb2.pdfq', pdfQ); } catch (e) {} pdfQSync();
+}));
+pdfQSync();
 function loadScript(src) {
   return new Promise((res, rej) => {
     const el = document.createElement('script'); el.src = src; el.onload = res;
@@ -1656,7 +1843,8 @@ async function importPdfPages() {
   if (!pdfDoc || !pages.length) return toast('Keine Seite ausgewählt');
   if (editing) commitEdit();
   $('dlgPdf').classList.remove('open'); pdfToken++;
-  const gap = 20, add = [], ph = pageH();
+  const gap = 20, add = [], ph = pageH(), [qMax, qF, qJ] = PDF_Q[pdfQ];
+  let bytes = 0;
   const cb = unionBox(els);
   // tatsächliche Seitenanfänge (inkl. verschobener Umbrüche), nach unten fortgesetzt
   const starts = [0, ...pageBreaks()];
@@ -1672,12 +1860,15 @@ async function importPdfPages() {
     const w = pageFmt === 'landscape' ? Math.min(W / 2, (ph - 4) / ratio) : W / 2, h = w * ratio;
     // Seite nie über einen Umbruch legen: sonst an den nächsten Seitenanfang
     { const [a, e] = pageOf(y); if (h < ph && y + h > e) y = e; }
-    const vp = page.getViewport({ scale: Math.min(1800, Math.round(w * 2.5)) / v1.width });
+    const vp = page.getViewport({ scale: Math.min(qMax, Math.round(w * qF)) / v1.width });
     const cv = document.createElement('canvas'); cv.width = Math.round(vp.width); cv.height = Math.round(vp.height);
     const ctx = cv.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, cv.width, cv.height);
     await page.render({ canvasContext: ctx, viewport: vp }).promise;
     ctx.strokeStyle = '#b0b0b0'; ctx.lineWidth = 2; ctx.strokeRect(1, 1, cv.width - 2, cv.height - 2);
-    add.push({ id: nid(), t: 'i', x: 0, y: r1(y + (pageFmt === 'landscape' ? 2 : 0)), w: r1(w), h: r1(h), href: cv.toDataURL('image/jpeg', .85) });
+    // Textseiten werden als PNG oft deutlich kleiner als als JPEG (und schärfer) – die kleinere Fassung gewinnt
+    const jpg = cv.toDataURL('image/jpeg', qJ), png = cv.toDataURL('image/png'), href = png.length < jpg.length ? png : jpg;
+    add.push({ id: nid(), t: 'i', x: 0, y: r1(y + (pageFmt === 'landscape' ? 2 : 0)), w: r1(w), h: r1(h), href });
+    bytes += href.length;
     y = pageFmt === 'landscape' ? pageOf(y)[1] : y + h + gap;
   }
   const last = add[add.length - 1];
@@ -1685,7 +1876,7 @@ async function importPdfPages() {
   change([...els, ...add], Math.max(H, Math.ceil(pageOf(last.y + last.h - 1)[1])));
   sel.clear(); drawUi();
   cont.scrollTop = add[0].y * scale() - 10;
-  toast(`${pages.length} Seite${pages.length > 1 ? 'n' : ''} importiert`, 2000);
+  toast(`${pages.length} Seite${pages.length > 1 ? 'n' : ''} importiert (${fmtSize(bytes)})`, 2500);
 }
 $('pdfInput').addEventListener('change', e => { const f = e.target.files[0]; e.target.value = ''; if (f) openPdf(f); });
 $('pdfAll').addEventListener('click', () => { pdfSel = new Set(Array.from({ length: pdfDoc ? pdfDoc.numPages : 0 }, (_, i) => i + 1)); pdfSync(); });
