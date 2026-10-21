@@ -17,7 +17,7 @@
 
 // ===================================================================== Grundlagen
 const NS = 'http://www.w3.org/2000/svg', XH = 'http://www.w3.org/1999/xhtml';
-const VERSION = '2026-10-21b';
+const VERSION = '2026-10-21c';
 const COLORS = ['#FFFFFF','#000000','#DDDDDD','#CC6677','#882255','#117733','#88CCEE','#332288','#999933','#DDCC77'];
 const TEXT_FONT = 'system-ui,"Segoe UI",Arial,sans-serif';
 const $ = id => document.getElementById(id);
@@ -28,6 +28,12 @@ const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
 let els = [];                 // Elemente
 let W = 1200, H = 800;        // logische Größe der Fläche
+const STD_W = 1460;           // v9.3: feste Breite neuer Boards (wie die Tafelbilder)
+// v9.3: Zoom nur für die Anzeige (1 = füllt die Fensterbreite); pro Gerät und Fenster gemerkt, nie in der Datei
+const ZOOM_KEY = 'wb2.zoom' + (location.hash === '#mirror' ? '.m' : '');
+const ZMIN = .5, ZMAX = 2;
+let zoom = 1;
+try { const z = parseFloat(localStorage.getItem(ZOOM_KEY)); if (z >= ZMIN && z <= ZMAX) zoom = z; } catch (e) {}
 let mode = 'draw';            // draw | select | text | erase
 let color = '#000000', strokeW = 1.5, fontSize = 28;
 let textFrame = false;        // v9.1: neue Textfelder mit Rahmen?
@@ -61,9 +67,11 @@ function toLogical(e) {
   const r = svg.getBoundingClientRect(), s = r.width / W;
   return { x: (e.clientX - r.left) / s, y: (e.clientY - r.top) / s };
 }
+// v9.3: linker Rand der Tafel im Scrollbereich (SVG-Elemente haben kein offsetLeft)
+function boardLeft() { return svg.getBoundingClientRect().left - cont.getBoundingClientRect().left + cont.scrollLeft; }
 function viewRect() { // sichtbarer Bereich in logischen Koordinaten
-  const s = scale();
-  return { x: 0, y: cont.scrollTop / s, w: W, h: cont.clientHeight / s };
+  const s = scale(), x = Math.max(0, (cont.scrollLeft - boardLeft()) / s);
+  return { x, y: cont.scrollTop / s, w: Math.min(W - x, cont.clientWidth / s), h: cont.clientHeight / s };
 }
 
 // ===================================================================== Geometrie
@@ -339,6 +347,27 @@ function drawGrid() {
   }
   mk('rect', { x: 0, y: 0, width: W, height: H, fill: 'url(#wbgrid)' }, gBg);
 }
+// ---- v9.3: Zoom (nur Anzeige). Der Punkt unter (cx, cy) bzw. der Fenstermitte bleibt stehen.
+function setZoom(z, cx, cy, anchor) {
+  z = clamp(Math.round(z * 100) / 100, ZMIN, ZMAX);
+  const r = cont.getBoundingClientRect();
+  if (cx === undefined) { cx = r.left + cont.clientWidth / 2; cy = r.top + cont.clientHeight / 2; }
+  const P = anchor || toLogical({ clientX: cx, clientY: cy });
+  zoom = z;
+  try { localStorage.setItem(ZOOM_KEY, String(z)); } catch (e) {}
+  applySize();
+  const s = scale(), sr = svg.getBoundingClientRect();
+  cont.scrollLeft += sr.left + P.x * s - cx;
+  cont.scrollTop += sr.top + P.y * s - cy;
+  syncPanel();
+}
+const ZSTEPS = [.5, .6, .7, .8, .9, 1, 1.1, 1.25, 1.5, 1.75, 2];
+function zoomStep(dir) {
+  const z = dir > 0 ? ZSTEPS.find(v => v > zoom + .001) : [...ZSTEPS].reverse().find(v => v < zoom - .001);
+  if (z) setZoom(z);
+  toast('Zoom ' + Math.round(zoom * 100) + ' %', 700);
+}
+function zoomFit() { setZoom(1); cont.scrollLeft = 0; toast('Zoom 100 % (Fensterbreite)', 900); }
 function cycleGrid() {
   grid = GRIDS[(GRIDS.indexOf(grid) + 1) % GRIDS.length];
   try { localStorage.setItem('wb2.grid', grid); } catch (e) {}
@@ -484,6 +513,10 @@ window.addEventListener('beforeprint', buildPrint);
 window.addEventListener('afterprint', () => { $('printArea').textContent = ''; });
 
 function applySize() {
+  // v9.3: Anzeigebreite = Fensterbreite × Zoom; kleiner als 100 % mittig, größer waagerecht scrollbar
+  svg.style.width = Math.max(50, Math.round(cont.clientWidth * zoom)) + 'px';
+  svg.style.margin = zoom < 1 ? '0 auto' : '0';
+  cont.style.overflowX = zoom > 1 ? 'auto' : 'hidden';
   svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
   svg.style.height = (H * scale()) + 'px';
   drawGrid();
@@ -665,7 +698,7 @@ function placeEditor() {
   if (!editing) return;
   const s = scale(), fr = !!editing.b, d = frameDims(editing.s), t = tint(editing.c, FRAME_ALPHA);
   // mit Rahmen: Rahmen und Innenabstand wie im fertigen Textfeld, damit nichts springt
-  Object.assign(ta.style, { left: editing.x * s - (fr ? 0 : 3) + 'px', top: editing.y * s - (fr ? 0 : 1) + 'px', fontSize: editing.s + 'px',
+  Object.assign(ta.style, { left: boardLeft() + editing.x * s - (fr ? 0 : 3) + 'px', top: editing.y * s - (fr ? 0 : 1) + 'px', fontSize: editing.s + 'px',
     color: editing.c, transform: `scale(${s})`,
     border: fr ? `${d.bw}px solid ${editing.c}` : '', background: fr ? `linear-gradient(${t},${t}) #fff` : '',
     padding: fr ? `${d.py}px ${d.px}px` : '', borderRadius: fr ? d.rad + 'px' : '', boxSizing: fr ? 'border-box' : '' });
@@ -742,7 +775,7 @@ ta.addEventListener('pointerdown', e => e.stopPropagation());
 
 function textAt() { // Einfügeposition für Text/Bilder: letzte Zeigerposition, sonst oben links im Sichtbereich
   const v = viewRect();
-  const p = (lastPointer && lastPointer.y > v.y && lastPointer.y < v.y + v.h - 20) ? { ...lastPointer } : { x: 40, y: v.y + 40 };
+  const p = (lastPointer && lastPointer.y > v.y && lastPointer.y < v.y + v.h - 20 && lastPointer.x > v.x && lastPointer.x < v.x + v.w) ? { ...lastPointer } : { x: v.x + 40, y: v.y + 40 };
   // nicht auf vorhandene Texte/Bilder legen: unterhalb ausweichen
   for (let k = 0; k < 50; k++) {
     const o = els.find(e => e.t !== 's' && (() => { const b = bbox(e); return p.x >= b.x - 10 && p.x <= b.x + b.w && p.y >= b.y - 10 && p.y <= b.y + b.h; })());
@@ -925,7 +958,7 @@ svg.addEventListener('pointerdown', e => {
   if (editing) { commitEdit(); if (mode !== 'text') return; }
   closeDialogs(true);
   if (e.pointerType === 'touch' && !fingerDraw && mode !== 'text') {   // im Text-Werkzeug zieht auch der Finger ein Textfeld auf
-    drag = { kind: 'scroll', id: e.pointerId, y0: e.clientY, s0: cont.scrollTop };
+    drag = { kind: 'scroll', id: e.pointerId, x0: e.clientX, y0: e.clientY, s0: cont.scrollTop, l0: cont.scrollLeft };
     svg.setPointerCapture(e.pointerId); return;
   }
   e.preventDefault();
@@ -980,13 +1013,51 @@ svg.addEventListener('pointerdown', e => {
   drawUi();
 });
 
+// v9.3: Zwei-Finger-Zoom. Läuft vor den normalen Handlern; ein begonnener Finger-Strich wird nicht unterbrochen.
+const touchPts = new Map();
+const tdist = () => { const [a, b] = [...touchPts.values()]; return Math.hypot(a.x - b.x, a.y - b.y) || 1; };
+const tmid = () => { const [a, b] = [...touchPts.values()]; return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }; };
+svg.addEventListener('pointerdown', e => {
+  if (e.pointerType !== 'touch') return;
+  touchPts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (touchPts.size !== 2 || penActive) return;
+  if (drag && !['scroll', 'textbox', 'rubber'].includes(drag.kind)) return;
+  e.stopImmediatePropagation(); e.preventDefault();
+  try { svg.setPointerCapture(e.pointerId); } catch (er) {}
+  const m = tmid();
+  drag = { kind: 'pinch', ids: new Set(touchPts.keys()), d0: tdist(), z0: zoom, P: toLogical({ clientX: m.x, clientY: m.y }) };
+  uiRubber = null; drawUi();
+}, true);
+svg.addEventListener('pointermove', e => {
+  if (e.pointerType !== 'touch' || !touchPts.has(e.pointerId)) return;
+  touchPts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (!drag || drag.kind !== 'pinch') return;
+  e.stopImmediatePropagation(); e.preventDefault();
+  if (touchPts.size < 2) return;
+  const m = tmid();
+  setZoom(drag.z0 * tdist() / drag.d0, m.x, m.y, drag.P);
+}, true);
+function touchEnd(e) {
+  if (e.pointerType !== 'touch') return;
+  touchPts.delete(e.pointerId);
+  if (drag && drag.kind === 'pinch') { e.stopImmediatePropagation(); if (touchPts.size < 2) drag = null; }
+}
+svg.addEventListener('pointerup', touchEnd, true);
+svg.addEventListener('pointercancel', touchEnd, true);
+// Strg + Mausrad (auch Touchpad-Spreizen) zoomt
+cont.addEventListener('wheel', e => {
+  if (!e.ctrlKey && !e.metaKey) return;
+  e.preventDefault();
+  setZoom(zoom * Math.exp(-e.deltaY * .002), e.clientX, e.clientY);
+}, { passive: false });
+
 // Kein Stiftdruck: alle Stifte zeichnen in gleichmäßiger Breite (Wunsch v8.4)
 function pressureOf(e) { return .5; }
 
 svg.addEventListener('pointermove', e => {
   if (!drag || e.pointerId !== drag.id) { if (!drag) lastPointer = toLogical(e); return; }
   e.preventDefault();
-  if (drag.kind === 'scroll') { cont.scrollTop = drag.s0 - (e.clientY - drag.y0); return; }
+  if (drag.kind === 'scroll') { cont.scrollTop = drag.s0 - (e.clientY - drag.y0); cont.scrollLeft = drag.l0 - (e.clientX - drag.x0); return; }
   const P = toLogical(e);
   switch (drag.kind) {
     case 'draw': {
@@ -1151,6 +1222,7 @@ const ACTIONS = {
   thicker: () => bigger(1.25, 'stroke'), thinner: () => bigger(.8, 'stroke'),
   fontUp: () => bigger(1.15, 'text'), fontDown: () => bigger(1 / 1.15, 'text'),
   selUp: () => bigger(1.15), selDown: () => bigger(1 / 1.15), frame: toggleFrame,
+  zoomIn: () => zoomStep(1), zoomOut: () => zoomStep(-1), zoomFit,
   extend: () => change(els, Math.ceil(H + cont.clientHeight / scale() * .5)),
   clip: clipPage,
   image: () => $('imgInput').click(), imgq: cycleImgPref, optimg: optimizeImages,
@@ -1188,7 +1260,7 @@ const GROUPS = [
 const KEYHINT = { draw: 'S', select: 'A', text: 'T', erase: 'D', erase2: 'Shift+D', undo: 'Z', redo: 'Y', del: 'Rücktaste', copy: 'C', cut: 'X',
   paste: 'Strg+V', all: 'Strg+A', straight: 'H', arc: 'K', mirror: 'F', rotR: 'R', rotL: 'L', thicker: '+', thinner: '−', extend: 'E',
   clip: 'Strg+E', image: 'P', grid: 'G', pdf: 'I', arrange: 'N', pbreak: 'U', print: 'Strg+P', open: 'O', save: 'Strg+S', saveAs: 'Strg+Shift+S', backups: 'B',
-  backupNow: 'Strg+B', calc: 'J', help: 'F1', fontUp: 'Schrift größer', fontDown: 'Schrift kleiner', frame: 'M' };
+  backupNow: 'Strg+B', calc: 'J', help: 'F1', fontUp: 'Schrift größer', fontDown: 'Schrift kleiner', frame: 'M', zoomIn: 'Strg++', zoomOut: 'Strg+−', zoomFit: 'Strg+0' };
 
 let hlMode = false;                        // Stufe 3 = Textmarker
 function setWidth(v) {                     // feste Stärke; wirkt bei Auswahl auch auf die gewählten Striche
@@ -1245,6 +1317,11 @@ function buildPanel() {
   const fr = $('fontRow');
   fr.append(mkBtn('fontDown', 'A⁻', 'Schrift kleiner', 'mini'), Object.assign(document.createElement('span'), { id: 'fontVal', className: 'fval' }),
             mkBtn('fontUp', 'A⁺', 'Schrift größer', 'mini'), mkBtn('frame', '▢', 'Textrahmen an/aus', 'mini'));
+  // v9.3: Zoomzeile (nur Anzeige)
+  const zr = document.createElement('div'); zr.id = 'zoomRow'; zr.className = 'fontrow';
+  zr.append(mkBtn('zoomOut', '−', 'Verkleinern', 'mini'), Object.assign(document.createElement('span'), { id: 'zoomVal', className: 'zval', title: 'Zoom (nur Anzeige, nicht Druck)' }),
+            mkBtn('zoomIn', '+', 'Vergrößern', 'mini'), mkBtn('zoomFit', '↔', 'Einpassen (100 % = Fensterbreite)', 'mini'));
+  fr.after(zr);
   // Rückgängig-Zeile
   const q = $('quick');
   q.append(mkBtn('undo', '↶', 'Rückgängig', 'mini'), mkBtn('redo', '↷', 'Wiederholen', 'mini'), mkBtn('del', '🗑', 'Löschen', 'mini'));
@@ -1299,6 +1376,7 @@ function syncPanel() {
   const fb = document.querySelector('[data-act=fmt]');
   if (fb) { fb.querySelector('.lab').textContent = FMT_LABEL[pageFmt]; fb.querySelector('.ico').textContent = pageFmt === 'landscape' ? '▭' : '▯'; }
   const fv = $('fontVal'); if (fv) fv.textContent = fontSize;
+  const zv = $('zoomVal'); if (zv) zv.textContent = Math.round(zoom * 100) + ' %';
   const frb = document.querySelector('[data-act=frame]'); if (frb) frb.classList.toggle('active', frameState());
   const wl = $('wline'); if (wl) wl.textContent = WIDTHS.some(w => w[0] === strokeW) ? '' : `Stärke ${String(strokeW).replace('.', ',')}`;
 }
@@ -1326,6 +1404,9 @@ document.addEventListener('keydown', e => {
       case 'c': copySel(false); break;
       case 'x': copySel(true); break;
       case 'v': handled = false; break;               // -> paste-Ereignis
+      case '+': case '=': zoomStep(1); break;         // v9.3: Zoom statt Browser-Zoom
+      case '-': zoomStep(-1); break;
+      case '0': zoomFit(); break;
       default: handled = false;
     }
   } else if (/^[0-9]$/.test(k)) setColor(COLORS[+k]);
@@ -1427,8 +1508,8 @@ function newBoard() {
   cont.scrollTop = 0; applySize(); render(); setDirty(false);
 }
 function freshSize() {
-  W = Math.max(320, Math.round(cont.clientWidth));
-  H = Math.ceil(cont.clientHeight * W / cont.clientWidth * 1.5);
+  W = STD_W;                                      // v9.3: feste Breite statt Fensterbreite
+  H = Math.ceil(cont.clientHeight * W / (cont.clientWidth || W) * 1.5);
 }
 
 // ===================================================================== Speichern / Laden
