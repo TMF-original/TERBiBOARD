@@ -1,6 +1,6 @@
 // TERBiBOARD · Copyright (C) 2026 DocTERBi (TERBi Teaching) · SPDX-License-Identifier: GPL-3.0-only
 // Service Worker: hält die App offline verfügbar. Bei Änderungen VERSION erhöhen.
-const VERSION = 'terbiboard-2026-10-20-1';
+const VERSION = 'terbiboard-2026-10-21-2';
 const FILES = ['./', 'index.html', 'style.css', 'app.js', 'katex.min.js', 'manifest.webmanifest',
                'icon-192.png', 'icon-512.png', 'icon-maskable.png', 'logo.png', 'pdf.min.js', 'pdf.worker.min.js', 'handbuch.html'];
 self.addEventListener('install', e => {

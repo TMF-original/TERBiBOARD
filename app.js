@@ -9,7 +9,7 @@
 
    Datenmodell: els = Array unveränderlicher Elementobjekte (Z-Reihenfolge).
      Strich: {id, t:'s', pts:[[x,y,p],…], c, w}
-     Text:   {id, t:'t', x, y, s, c, txt}
+     Text:   {id, t:'t', x, y, s, c, txt, tw?, b?}   (tw = feste Breite, b:1 = Rahmen, ab v9.1)
      Bild:   {id, t:'i', x, y, w, h, href}
    Jede Änderung erzeugt neue Objekte bzw. ein neues Array -> Undo = Array-Referenzen. */
 (() => {
@@ -17,7 +17,7 @@
 
 // ===================================================================== Grundlagen
 const NS = 'http://www.w3.org/2000/svg', XH = 'http://www.w3.org/1999/xhtml';
-const VERSION = '2026-10-20a';
+const VERSION = '2026-10-21b';
 const COLORS = ['#FFFFFF','#000000','#DDDDDD','#CC6677','#882255','#117733','#88CCEE','#332288','#999933','#DDCC77'];
 const TEXT_FONT = 'system-ui,"Segoe UI",Arial,sans-serif';
 const $ = id => document.getElementById(id);
@@ -30,6 +30,8 @@ let els = [];                 // Elemente
 let W = 1200, H = 800;        // logische Größe der Fläche
 let mode = 'draw';            // draw | select | text | erase
 let color = '#000000', strokeW = 1.5, fontSize = 28;
+let textFrame = false;        // v9.1: neue Textfelder mit Rahmen?
+try { textFrame = localStorage.getItem('wb2.frame') === '1'; } catch (e) {}
 let sel = new Set();          // ausgewählte ids
 let undoStack = [], redoStack = [];
 let dirty = false, fileHandle = null, fileName = null, fingerDraw = false;
@@ -248,6 +250,20 @@ function hlStyle(n) {
   n.setAttribute('fill-opacity', '.45'); n.setAttribute('data-hl', '1');
   n.setAttribute('style', 'mix-blend-mode:multiply');
 }
+// v9.1: Textrahmen – Rahmen in der Schriftfarbe, Hintergrund sehr blass in derselben Farbe
+function tint(c, a) {
+  let h = String(c || '').replace('#', '');
+  if (h.length === 3) h = h.replace(/./g, x => x + x);
+  if (!/^[0-9a-f]{6}$/i.test(h)) return `rgba(0,0,0,${a})`;
+  const n = parseInt(h, 16);
+  return `rgba(${n >> 16 & 255},${n >> 8 & 255},${n & 255},${a})`;
+}
+const FRAME_ALPHA = .08;
+function frameDims(s) { return { bw: r1(Math.max(1.5, s * .07)), py: r1(s * .15), px: r1(s * .35), rad: r1(s * .25) }; }
+function frameCSS(c, s) {
+  const d = frameDims(s);
+  return `;box-sizing:border-box;border:${d.bw}px solid ${c};background:${tint(c, FRAME_ALPHA)};border-radius:${d.rad}px;padding:${d.py}px ${d.px}px`;
+}
 function buildNode(el) {
   let n;
   if (el.t === 's') {
@@ -262,8 +278,9 @@ function buildNode(el) {
     div.setAttribute('class', 'wbt');
     // feste Breite (tw): Text wird umbrochen; sonst so breit wie die längste Zeile
     const wrap = el.tw ? `white-space:pre-wrap;overflow-wrap:break-word;width:${el.tw}px;` : 'white-space:pre;';
-    div.setAttribute('style', `display:inline-block;${wrap}line-height:1.25;font-family:${TEXT_FONT};font-size:${el.s}px;color:${el.c}`);
+    div.setAttribute('style', `display:inline-block;${wrap}line-height:1.25;font-family:${TEXT_FONT};font-size:${el.s}px;color:${el.c}${el.b ? frameCSS(el.c, el.s) : ''}`);
     if (el.tw) n.setAttribute('data-tw', el.tw);
+    if (el.b) n.setAttribute('data-b', '1');
     div.innerHTML = texHTML(el.txt);
     n.appendChild(div);
   }
@@ -480,6 +497,7 @@ function handleSize() { return 9 / scale(); }
 function selList() { return els.filter(e => sel.has(e.id)); }
 function drawUi() {
   scheduleSync(); syncSelGroup();
+  const frb = document.querySelector('[data-act=frame]'); if (frb) frb.classList.toggle('active', frameState());
   gUi.textContent = '';
   const pb = pageBreaks();
   pb.forEach((y, i) => {
@@ -551,9 +569,35 @@ function rotate(cw) {
 }
 function setColor(c) {
   color = c; syncPanel();
-  if (editing) { editing.c = c; ta.style.color = c; sendEditPreview(); return; }
+  if (editing) { editing.c = c; ta.style.color = c; placeEditor(); sendEditPreview(); return; }
   const list = selList().filter(e => e.t !== 'i');
   if (list.length && mode === 'select') change(replaceEls(new Map(list.map(e => [e.id, { ...e, c }]))));
+}
+// v9.1: Rahmen für Textfelder. Wirkt auf das gerade bearbeitete Textfeld, sonst auf die
+// ausgewählten Textfelder, sonst als Voreinstellung für neue Textfelder (wird gemerkt).
+function setFrameDefault(on) {
+  textFrame = on;
+  try { localStorage.setItem('wb2.frame', on ? '1' : ''); } catch (e) {}
+}
+function frameState() {
+  if (editing) return !!editing.b;
+  const list = mode === 'select' ? selList().filter(e => e.t === 't') : [];
+  return list.length ? list.every(e => e.b) : textFrame;
+}
+function toggleFrame() {
+  if (editing) {
+    editing.b = editing.b ? 0 : 1;
+    if (editing.isNew) setFrameDefault(!!editing.b);   // neues Feld: gilt auch für die folgenden
+    placeEditor(); syncPanel(); toast(editing.b ? 'Textrahmen an' : 'Textrahmen aus', 900); return;
+  }
+  const list = mode === 'select' ? selList().filter(e => e.t === 't') : [];
+  if (list.length) {
+    const on = list.some(e => !e.b);
+    change(replaceEls(new Map(list.map(e => { const o = { ...e }; if (on) o.b = 1; else delete o.b; return [e.id, o]; }))));
+    syncPanel(); toast(`Rahmen ${on ? 'an' : 'aus'} (${list.length} Textfeld${list.length > 1 ? 'er' : ''})`, 1100); return;
+  }
+  setFrameDefault(!textFrame); syncPanel();
+  toast(textFrame ? 'Neue Textfelder mit Rahmen' : 'Neue Textfelder ohne Rahmen', 1300);
 }
 function bigger(f, which) { // which: 'stroke' | 'text' | undefined(auto)
   const list = selList().filter(e => e.t !== 'i');
@@ -605,8 +649,8 @@ ta.className = 'wbedit'; ta.spellcheck = false; ta.setAttribute('wrap', 'off');
 function startEdit(el, x, y, tw) {
   if (editing) commitEdit();
   sel.clear();
-  editing = el ? { id: el.id, x: el.x, y: el.y, s: el.s, c: el.c, tw: el.tw || 0, isNew: false, orig: el }
-               : { id: nid(), x: r1(x), y: r1(y), s: fontSize, c: color, tw: tw ? r1(tw) : 0, isNew: true, orig: null };
+  editing = el ? { id: el.id, x: el.x, y: el.y, s: el.s, c: el.c, tw: el.tw || 0, b: el.b ? 1 : 0, isNew: false, orig: el }
+               : { id: nid(), x: r1(x), y: r1(y), s: fontSize, c: color, tw: tw ? r1(tw) : 0, b: textFrame ? 1 : 0, isNew: true, orig: null };
   ta.setAttribute('wrap', editing.tw ? 'soft' : 'off');
   ta.style.whiteSpace = editing.tw ? 'pre-wrap' : 'pre';
   ta.style.overflowWrap = editing.tw ? 'break-word' : 'normal';
@@ -615,20 +659,24 @@ function startEdit(el, x, y, tw) {
   cont.appendChild(ta);
   placeEditor();
   ta.focus({ preventScroll: true });
-  drawUi();
+  drawUi(); syncPanel();
 }
 function placeEditor() {
   if (!editing) return;
-  const s = scale();
-  Object.assign(ta.style, { left: editing.x * s - 3 + 'px', top: editing.y * s - 1 + 'px', fontSize: editing.s + 'px',
-    color: editing.c, transform: `scale(${s})` });
+  const s = scale(), fr = !!editing.b, d = frameDims(editing.s), t = tint(editing.c, FRAME_ALPHA);
+  // mit Rahmen: Rahmen und Innenabstand wie im fertigen Textfeld, damit nichts springt
+  Object.assign(ta.style, { left: editing.x * s - (fr ? 0 : 3) + 'px', top: editing.y * s - (fr ? 0 : 1) + 'px', fontSize: editing.s + 'px',
+    color: editing.c, transform: `scale(${s})`,
+    border: fr ? `${d.bw}px solid ${editing.c}` : '', background: fr ? `linear-gradient(${t},${t}) #fff` : '',
+    padding: fr ? `${d.py}px ${d.px}px` : '', borderRadius: fr ? d.rad + 'px' : '', boxSizing: fr ? 'border-box' : '' });
   autosize();
 }
 function autosize() {
   ta.style.height = '0px';
-  if (editing.tw) ta.style.width = (editing.tw + 4) + 'px';      // feste Breite, Text bricht um
-  else { ta.style.width = '0px'; ta.style.width = (ta.scrollWidth + editing.s) + 'px'; }
-  ta.style.height = (ta.scrollHeight + 2) + 'px';
+  const fb = editing.b ? frameDims(editing.s).bw * 2 : 0;          // Rahmen (border-box)
+  if (editing.tw) ta.style.width = (editing.tw + (editing.b ? 0 : 4)) + 'px';      // feste Breite, Text bricht um
+  else { ta.style.width = '0px'; ta.style.width = (ta.scrollWidth + (editing.b ? fb + 2 : editing.s)) + 'px'; }
+  ta.style.height = (ta.scrollHeight + 2 + fb) + 'px';
   sendEditPreview();
 }
 // ---- Live-Text fürs zweite Fenster: beim Tippen wird nur eine kleine Vorschau-Nachricht geschickt
@@ -640,7 +688,7 @@ function sendEditPreview() {
     previewTimer = 0; previewLast = performance.now();
     if (!editing) return;
     const e = editing;
-    post({ type: 'editPreview', id: e.id, x: e.x, y: e.y, s: e.s, c: e.c, tw: e.tw || 0, txt: ta.value });
+    post({ type: 'editPreview', id: e.id, x: e.x, y: e.y, s: e.s, c: e.c, tw: e.tw || 0, b: e.b ? 1 : 0, txt: ta.value });
   }, wait);
 }
 const previews = new Map();               // Empfänger: id -> {node, done, timer}
@@ -652,6 +700,7 @@ function showPreview(m) {
   }
   const el = { id: m.id, t: 't', x: m.x, y: m.y, s: m.s, c: m.c, txt: m.txt || ' ' };
   if (m.tw) el.tw = m.tw;
+  if (m.b) el.b = 1;
   const n = buildNode(el); n.classList.add('preview'); n._el = null;
   if (p) p.node.replaceWith(n); else { gTxt.appendChild(n); p = {}; previews.set(m.id, p); }
   p.node = n; p.done = false; clearTimeout(p.timer);
@@ -673,10 +722,12 @@ function commitEdit() {
   ta.remove();
   const n = nodes.get(ed.id); if (n) n.style.visibility = '';
   if (ed.isNew) {
-    if (txt) { const t = { id: ed.id, t: 't', x: ed.x, y: ed.y, s: ed.s, c: ed.c, txt }; if (ed.tw) t.tw = ed.tw; change([...els, t]); }
+    if (txt) { const t = { id: ed.id, t: 't', x: ed.x, y: ed.y, s: ed.s, c: ed.c, txt }; if (ed.tw) t.tw = ed.tw; if (ed.b) t.b = 1; change([...els, t]); }
   } else if (!txt) change(els.filter(e => e.id !== ed.id));
-  else if (txt !== ed.orig.txt || ed.c !== ed.orig.c || ed.s !== ed.orig.s)
-    change(replaceEls(new Map([[ed.id, { ...ed.orig, txt, c: ed.c, s: ed.s }]])));
+  else if (txt !== ed.orig.txt || ed.c !== ed.orig.c || ed.s !== ed.orig.s || !ed.b !== !ed.orig.b) {
+    const o = { ...ed.orig, txt, c: ed.c, s: ed.s }; if (ed.b) o.b = 1; else delete o.b;
+    change(replaceEls(new Map([[ed.id, o]])));
+  }
   else render();
   const b = els.find(e => e.id === ed.id);
   if (b) { const bb = bbox(b); if (bb.y + bb.h + 40 > H) { H = Math.ceil(bb.y + bb.h + 120); applySize(); } }
@@ -704,7 +755,8 @@ function insertText(txt, at) {
   txt = txt.replace(/\r\n?/g, '\n').replace(/\t/g, '    ').replace(/\s+$/, '');
   if (!txt) return;
   const p = at || textAt();
-  insertAndSelect([{ id: nid(), t: 't', x: r1(p.x), y: r1(p.y), s: fontSize, c: color, txt }]);
+  const t = { id: nid(), t: 't', x: r1(p.x), y: r1(p.y), s: fontSize, c: color, txt }; if (textFrame) t.b = 1;
+  insertAndSelect([t]);
 }
 
 // ===================================================================== Bilder
@@ -1098,7 +1150,7 @@ const ACTIONS = {
   rotR: () => rotate(true), rotL: () => rotate(false),
   thicker: () => bigger(1.25, 'stroke'), thinner: () => bigger(.8, 'stroke'),
   fontUp: () => bigger(1.15, 'text'), fontDown: () => bigger(1 / 1.15, 'text'),
-  selUp: () => bigger(1.15), selDown: () => bigger(1 / 1.15),
+  selUp: () => bigger(1.15), selDown: () => bigger(1 / 1.15), frame: toggleFrame,
   extend: () => change(els, Math.ceil(H + cont.clientHeight / scale() * .5)),
   clip: clipPage,
   image: () => $('imgInput').click(), imgq: cycleImgPref, optimg: optimizeImages,
@@ -1133,10 +1185,10 @@ const GROUPS = [
   ['extra', 'Extras', [['mirror', '⧉', 'Zweites Fenster'], ['follow', '⇵', 'Scrollen koppeln'], ['finger', '☝', 'Finger zeichnet'],
       ['calc', '∑', 'Rechner'], ['help', '?', 'Hilfe']]],
 ];
-const KEYHINT = { draw: 'Leertaste', select: 'Leertaste', text: 'T', erase: 'D', erase2: 'Shift+D', undo: 'Z', redo: 'Y', del: 'Rücktaste', copy: 'C', cut: 'X',
+const KEYHINT = { draw: 'S', select: 'A', text: 'T', erase: 'D', erase2: 'Shift+D', undo: 'Z', redo: 'Y', del: 'Rücktaste', copy: 'C', cut: 'X',
   paste: 'Strg+V', all: 'Strg+A', straight: 'H', arc: 'K', mirror: 'F', rotR: 'R', rotL: 'L', thicker: '+', thinner: '−', extend: 'E',
-  clip: 'Strg+E', image: 'P', grid: 'G', pdf: 'I', arrange: 'A', pbreak: 'U', print: 'Strg+P', open: 'O', save: 'S', saveAs: 'Shift+S', backups: 'B',
-  backupNow: 'Strg+B', calc: 'J', help: 'F1', fontUp: 'Schrift größer', fontDown: 'Schrift kleiner' };
+  clip: 'Strg+E', image: 'P', grid: 'G', pdf: 'I', arrange: 'N', pbreak: 'U', print: 'Strg+P', open: 'O', save: 'Strg+S', saveAs: 'Strg+Shift+S', backups: 'B',
+  backupNow: 'Strg+B', calc: 'J', help: 'F1', fontUp: 'Schrift größer', fontDown: 'Schrift kleiner', frame: 'M' };
 
 let hlMode = false;                        // Stufe 3 = Textmarker
 function setWidth(v) {                     // feste Stärke; wirkt bei Auswahl auch auf die gewählten Striche
@@ -1192,7 +1244,7 @@ function buildPanel() {
   // Schrift
   const fr = $('fontRow');
   fr.append(mkBtn('fontDown', 'A⁻', 'Schrift kleiner', 'mini'), Object.assign(document.createElement('span'), { id: 'fontVal', className: 'fval' }),
-            mkBtn('fontUp', 'A⁺', 'Schrift größer', 'mini'));
+            mkBtn('fontUp', 'A⁺', 'Schrift größer', 'mini'), mkBtn('frame', '▢', 'Textrahmen an/aus', 'mini'));
   // Rückgängig-Zeile
   const q = $('quick');
   q.append(mkBtn('undo', '↶', 'Rückgängig', 'mini'), mkBtn('redo', '↷', 'Wiederholen', 'mini'), mkBtn('del', '🗑', 'Löschen', 'mini'));
@@ -1247,6 +1299,7 @@ function syncPanel() {
   const fb = document.querySelector('[data-act=fmt]');
   if (fb) { fb.querySelector('.lab').textContent = FMT_LABEL[pageFmt]; fb.querySelector('.ico').textContent = pageFmt === 'landscape' ? '▭' : '▯'; }
   const fv = $('fontVal'); if (fv) fv.textContent = fontSize;
+  const frb = document.querySelector('[data-act=frame]'); if (frb) frb.classList.toggle('active', frameState());
   const wl = $('wline'); if (wl) wl.textContent = WIDTHS.some(w => w[0] === strokeW) ? '' : `Stärke ${String(strokeW).replace('.', ',')}`;
 }
 
@@ -1279,10 +1332,11 @@ document.addEventListener('keydown', e => {
   else switch (lk) {
     case ' ': ACTIONS.toggle(); break;
     case 't': setMode('text'); break;
+    case 'm': toggleFrame(); break;
     case 'd': case 'D': { const m = e.shiftKey ? 'erase2' : 'erase'; setMode(mode === m ? 'draw' : m); break; }
     case 'z': undo(); break;
     case 'y': redo(); break;
-    case 's': save(e.shiftKey); break;
+    case 's': setMode('draw'); break;              // v9.2: S = Stift (Speichern nur noch Strg+S)
     case 'o': openFile(); break;
     case 'c': copySel(false); break;
     case 'x': copySel(true); break;
@@ -1291,7 +1345,8 @@ document.addEventListener('keydown', e => {
     case 'e': ACTIONS.extend(); break;
     case 'p': $('imgInput').click(); break;
     case 'g': cycleGrid(); break;
-    case 'a': arrangeForPrint(); break;
+    case 'a': setMode('select'); break;            // v9.2: A = Auswahl
+    case 'n': arrangeForPrint(); break;            // v9.2: N = für Druck anordnen (vorher A)
     case 'u': ACTIONS.pbreak(); break;
     case 'i': $('pdfInput').click(); break;
     case 'h': ACTIONS.straight(); break;
@@ -1416,8 +1471,8 @@ function serialize(compact) {
     c.insertBefore(bg, c.firstChild);
   } else {
     const cls = new Map(); let css = '';
-    c.querySelectorAll('[data-pts],[data-w],[data-txt],[data-s],[data-c],[data-tw],[data-hl]').forEach(n => {
-      ['data-pts', 'data-w', 'data-txt', 'data-s', 'data-c', 'data-tw', 'data-hl'].forEach(a => n.removeAttribute(a));
+    c.querySelectorAll('[data-pts],[data-w],[data-txt],[data-s],[data-c],[data-tw],[data-hl],[data-b]').forEach(n => {
+      ['data-pts', 'data-w', 'data-txt', 'data-s', 'data-c', 'data-tw', 'data-hl', 'data-b'].forEach(a => n.removeAttribute(a));
     });
     c.querySelectorAll('path.s').forEach(n => {
       const f = n.getAttribute('fill');
@@ -1456,6 +1511,7 @@ function parseBoard(text) {
     } else if (cl === 't') {
       const t = { id: nid(), t: 't', x: num(n, 'x'), y: num(n, 'y'), s: num(n, 'data-s', 28), c: n.getAttribute('data-c') || '#000000', txt: n.getAttribute('data-txt') || '' };
       const tw = num(n, 'data-tw', 0); if (tw > 0) t.tw = tw;
+      if (n.getAttribute('data-b') === '1') t.b = 1;
       out.push(t);
     }
   }
