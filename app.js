@@ -17,7 +17,7 @@
 
 // ===================================================================== Grundlagen
 const NS = 'http://www.w3.org/2000/svg', XH = 'http://www.w3.org/1999/xhtml';
-const VERSION = '2026-10-21c';
+const VERSION = '2026-10-29a';
 const COLORS = ['#FFFFFF','#000000','#DDDDDD','#CC6677','#882255','#117733','#88CCEE','#332288','#999933','#DDCC77'];
 const TEXT_FONT = 'system-ui,"Segoe UI",Arial,sans-serif';
 const $ = id => document.getElementById(id);
@@ -916,6 +916,58 @@ async function insertImageFile(file) {
   const p = textAt();
   insertAndSelect([{ id: nid(), t: 'i', x: r1(clamp(p.x, 0, W - w)), y: r1(p.y), w: r1(w), h: r1(h), href }]);
 }
+
+// v9.4: SVG-Code (z. B. aus einem KI-Chat) als unveränderliches Bild einfügen – „Einfügen → SVG-Code“ (Shift+P) oder Strg+V
+const SVG_NS = 'http://www.w3.org/2000/svg';
+function svgCodeFrom(txt, strict) {            // SVG aus Text holen (auch mit ```svg-Zeilen); strict: Text besteht nur aus dem SVG
+  const t = String(txt || '').trim().replace(/^```[\w-]*[ \t]*\r?\n?/, '').replace(/\r?\n?```\s*$/, '').trim();
+  if (strict && !/^(<\?xml[^>]*>\s*)?(<!--[\s\S]*?-->\s*)*(<!DOCTYPE[^>]*>\s*)?<svg[\s>]/i.test(t)) return null;
+  const a = t.search(/<svg[\s>]/i), b = t.toLowerCase().lastIndexOf('</svg');
+  if (a < 0 || b < a) return null;
+  const e = t.indexOf('>', b);
+  if (e < 0 || (strict && t.slice(e + 1).trim())) return null;
+  return t.slice(a, e + 1);
+}
+function svgCodeToFile(code) {                 // -> File (image/svg+xml) mit festen Maßen; wirft bei ungültigem Code
+  if (!/^<svg\b[^>]*\sxmlns\s*=/i.test(code)) code = code.replace(/^<svg\b/i, `<svg xmlns="${SVG_NS}"`);
+  if (/\bxlink:/.test(code) && !/^<svg\b[^>]*\sxmlns:xlink\s*=/i.test(code)) code = code.replace(/^<svg\b/i, '<svg xmlns:xlink="http://www.w3.org/1999/xlink"');
+  const doc = new DOMParser().parseFromString(code, 'image/svg+xml'), s = doc.documentElement;
+  if (doc.getElementsByTagName('parsererror').length || s.localName !== 'svg' || s.namespaceURI !== SVG_NS) throw new Error('kein gültiges SVG');
+  s.querySelectorAll('script').forEach(n => n.remove());
+  for (const n of [s, ...s.querySelectorAll('*')]) for (const at of [...n.attributes]) if (/^on/i.test(at.name)) n.removeAttribute(at.name);
+  const num = v => { const m = /^\s*(\d*\.?\d+)\s*(px)?\s*$/i.exec(v || ''); return m ? +m[1] : 0; };
+  const vb = (s.getAttribute('viewBox') || '').trim().split(/[\s,]+/).map(Number);
+  const hasVb = vb.length === 4 && vb.every(isFinite) && vb[2] > 0 && vb[3] > 0;
+  let w = num(s.getAttribute('width')), h = num(s.getAttribute('height'));
+  if (!w && !h) [w, h] = hasVb ? [vb[2], vb[3]] : [300, 150];   // nur viewBox: deren Maße
+  else if (!h) h = hasVb ? w * vb[3] / vb[2] : w / 2;          // nur Breite: Höhe aus dem Seitenverhältnis
+  else if (!w) w = hasVb ? h * vb[2] / vb[3] : h * 2;
+  if (!hasVb) s.setAttribute('viewBox', `0 0 ${w} ${h}`);       // sonst ließe sich das Bild nicht skalieren
+  s.setAttribute('width', r1(w)); s.setAttribute('height', r1(h));
+  // beim freien Skalieren wie ein Rasterbild verzerren – außer das SVG legt selbst etwas anderes fest
+  if (!s.hasAttribute('preserveAspectRatio') && (!hasVb || Math.abs(w / h - vb[2] / vb[3]) < .01 * w / h)) s.setAttribute('preserveAspectRatio', 'none');
+  return new File([new XMLSerializer().serializeToString(s)], 'code.svg', { type: 'image/svg+xml' });
+}
+async function insertSvgCode(code) {          // true = eingefügt
+  let file;
+  try { file = svgCodeToFile(code); } catch (err) { toast('Kein gültiger SVG-Code – bitte den ganzen Code von „<svg“ bis „</svg>“ kopieren', 3500); return false; }
+  try { await insertImageFile(file); } catch (err) { toast('Der SVG-Code lässt sich nicht als Bild darstellen', 3000); return false; }
+  toast('SVG-Code als Bild eingefügt'); return true;
+}
+function openSvgIn() {
+  $('svgInErr').textContent = '';
+  openDialog('dlgSvgIn'); setTimeout(() => { $('svgCodeIn').focus(); $('svgCodeIn').select(); }, 0);
+}
+async function svgInGo() {
+  const code = svgCodeFrom($('svgCodeIn').value, false);
+  if (!code) { $('svgInErr').textContent = 'Kein SVG-Code gefunden – der Code muss mit „<svg“ beginnen und mit „</svg>“ enden.'; return; }
+  try { svgCodeToFile(code); } catch (err) { $('svgInErr').textContent = 'Der SVG-Code ist fehlerhaft (z. B. unvollständig kopiert) und lässt sich nicht lesen.'; return; }
+  $('dlgSvgIn').classList.remove('open');
+  if (await insertSvgCode(code)) $('svgCodeIn').value = '';
+}
+$('svgInGo').addEventListener('click', svgInGo);
+$('svgInCancel').addEventListener('click', () => $('dlgSvgIn').classList.remove('open'));
+$('svgCodeIn').addEventListener('keydown', e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); svgInGo(); } });
 // v9.0: alle Bilder auf ihre angezeigte Größe herunterrechnen (×2 für scharfen Druck/Beamer); rückgängig machbar
 async function optimizeImages() {
   if (editing) commitEdit();
@@ -1225,7 +1277,7 @@ const ACTIONS = {
   zoomIn: () => zoomStep(1), zoomOut: () => zoomStep(-1), zoomFit,
   extend: () => change(els, Math.ceil(H + cont.clientHeight / scale() * .5)),
   clip: clipPage,
-  image: () => $('imgInput').click(), imgq: cycleImgPref, optimg: optimizeImages,
+  image: () => $('imgInput').click(), svgin: openSvgIn, imgq: cycleImgPref, optimg: optimizeImages,
   grid: cycleGrid, fmt: toggleFormat, arrange: arrangeForPrint, pbreak: () => setMode(mode === 'pbreak' ? 'draw' : 'pbreak'), pdf: () => $('pdfInput').click(),
   print: doPrint,
   newb: newBoard, open: openFile, save: () => save(false), saveAs: () => save(true), compact: exportCompact, svgcode: showSvgCode,
@@ -1248,7 +1300,7 @@ const GROUPS = [
   ['sel', 'Auswahl bearbeiten', [['copy', '⧉', 'Kopieren'], ['cut', '✂', 'Ausschneiden'], ['all', '▣', 'Alles auswählen'],
       ['straight', '╱', 'Gerade'], ['arc', '◠', 'Kreisbogen'], ['flat', '〰', 'Glätten'],
       ['rotR', '↻', 'Drehen rechts'], ['rotL', '↺', 'Drehen links'], ['selUp', '⤢', 'Größer'], ['selDown', '⤡', 'Kleiner']]],
-  ['ins', 'Einfügen', [['paste', '📋', 'Aus Zwischenablage'], ['image', '🖼', 'Bild'], ['pdf', '📄', 'PDF-Seiten'],
+  ['ins', 'Einfügen', [['paste', '📋', 'Aus Zwischenablage'], ['image', '🖼', 'Bild'], ['svgin', '&lt;/&gt;', 'SVG-Code als Bild'], ['pdf', '📄', 'PDF-Seiten'],
       ['imgq', '⚖', 'Bildgröße: fragen'], ['optimg', '🗜', 'Bilder verkleinern']]],
   ['page', 'Seite & Druck', [['grid', '▦', 'Gitter: aus'], ['fmt', '▯', 'Format: Hoch'], ['extend', '⇣', 'Verlängern'], ['clip', '⇡', 'Auf Inhalt kürzen'],
       ['arrange', '⇅', 'Für Druck anordnen'], ['pbreak', '⤓', 'Fester Umbruch'], ['print', '⎙', 'Drucken / PDF']]],
@@ -1259,7 +1311,7 @@ const GROUPS = [
 ];
 const KEYHINT = { draw: 'S', select: 'A', text: 'T', erase: 'D', erase2: 'Shift+D', undo: 'Z', redo: 'Y', del: 'Rücktaste', copy: 'C', cut: 'X',
   paste: 'Strg+V', all: 'Strg+A', straight: 'H', arc: 'K', mirror: 'F', rotR: 'R', rotL: 'L', thicker: '+', thinner: '−', extend: 'E',
-  clip: 'Strg+E', image: 'P', grid: 'G', pdf: 'I', arrange: 'N', pbreak: 'U', print: 'Strg+P', open: 'O', save: 'Strg+S', saveAs: 'Strg+Shift+S', backups: 'B',
+  clip: 'Strg+E', image: 'P', svgin: 'Shift+P', grid: 'G', pdf: 'I', arrange: 'N', pbreak: 'U', print: 'Strg+P', open: 'O', save: 'Strg+S', saveAs: 'Strg+Shift+S', backups: 'B',
   backupNow: 'Strg+B', calc: 'J', help: 'F1', fontUp: 'Schrift größer', fontDown: 'Schrift kleiner', frame: 'M', zoomIn: 'Strg++', zoomOut: 'Strg+−', zoomFit: 'Strg+0' };
 
 let hlMode = false;                        // Stufe 3 = Textmarker
@@ -1424,7 +1476,7 @@ document.addEventListener('keydown', e => {
     case 'v': pasteInternal(); break;
     case 'Backspace': case 'Delete': deleteSel(); break;
     case 'e': ACTIONS.extend(); break;
-    case 'p': $('imgInput').click(); break;
+    case 'p': if (e.shiftKey) openSvgIn(); else $('imgInput').click(); break;   // v9.4: Shift+P = SVG-Code
     case 'g': cycleGrid(); break;
     case 'a': setMode('select'); break;            // v9.2: A = Auswahl
     case 'n': arrangeForPrint(); break;            // v9.2: N = für Druck anordnen (vorher A)
@@ -1467,6 +1519,8 @@ document.addEventListener('paste', async e => {
   if (dt) {
     for (const it of dt.items) if (it.kind === 'file' && it.type.startsWith('image/')) { await insertImageFile(it.getAsFile()); return; }
     const txt = dt.getData('text/plain');
+    const svg = svgCodeFrom(txt, true);                    // v9.4: reiner SVG-Code wird zum Bild
+    if (svg) { await insertSvgCode(svg); return; }
     if (txt && txt.trim()) { insertText(txt); return; }
   }
   pasteInternal();
@@ -1481,6 +1535,8 @@ async function pasteFromSystemOrInternal() { // Panel-Button: versucht die Syste
       }
       for (const it of items) if (it.types.includes('text/plain')) {
         const txt = await (await it.getType('text/plain')).text();
+        const svg = svgCodeFrom(txt, true);                // v9.4
+        if (svg) { await insertSvgCode(svg); return; }
         if (txt.trim()) { insertText(txt); return; }
       }
     }

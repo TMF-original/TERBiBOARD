@@ -67,7 +67,7 @@
       <dt>S / A</dt><dd>Stift / Auswahl wählen</dd>
       <dt>Leertaste</dt><dd>Zwischen Stift und Auswahl wechseln</dd>
       <dt>T</dt><dd>Text-Werkzeug: Klick setzt ein Textfeld (Formeln mit <code>$…$</code> bzw. <code>$$…$$</code>)</dd>
-      <dt>Strg+V</dt><dd>Aus der Zwischenablage einfügen: Bild → Bild, Text → neues Textfeld</dd>
+      <dt>Strg+V</dt><dd>Aus der Zwischenablage einfügen: Bild → Bild, SVG-Code → Bild, Text → neues Textfeld</dd>
       <dt>Doppelklick</dt><dd>Textfeld bearbeiten (in Auswahl- oder Text-Werkzeug)</dd>
       <dt>Strg+Enter / Esc</dt><dd>Textbearbeitung beenden</dd>
       <dt>Z / Strg+Z</dt><dd>Rückgängig &nbsp;·&nbsp; <b>Y / Strg+Y</b>: Wiederholen</dd>
@@ -76,6 +76,7 @@
       <dt>⌫ / Entf</dt><dd>Letztes Element bzw. Auswahl entfernen</dd>
       <dt>E</dt><dd>Fläche nach unten verlängern (Strg+E: auf Inhalt kürzen)</dd>
       <dt>P</dt><dd>Bild einfügen (Strg+P: Drucken / PDF)</dd>
+      <dt>Shift+P</dt><dd>SVG-Code als Bild einfügen (Panel „Einfügen → SVG-Code als Bild“): Code hineinkopieren, auch mit ```svg-Zeilen aus einem KI-Chat. Reiner SVG-Code in der Zwischenablage wird auch mit Strg+V zum Bild.</dd>
       <dt>Bildgröße</dt><dd>Bei großen Bildern fragt TERBiBOARD beim Einfügen nach der Größe (Original / Groß / Mittel / Klein) und zeigt die Dateigröße dazu. Panel „Einfügen → Bildgröße“ legt eine feste Stufe fest oder schaltet die Abfrage wieder ein. Fotos werden als JPEG, Bilder mit Transparenz als PNG gespeichert.</dd>
       <dt>Bilder verkleinern</dt><dd>Panel „Einfügen → Bilder verkleinern“: rechnet alle Bilder und PDF-Seiten auf ihre angezeigte Größe herunter (doppelte Auflösung für scharfen Druck), auch in älteren Boards; mit Z rückgängig. Mehrfach eingefügte Bilder stehen in der Datei nur einmal.</dd>
       <dt>H</dt><dd>Gerade bzw. waagerecht/senkrecht annähern</dd>
@@ -167,6 +168,16 @@
     <div id="pdfThumbs" class="thumbs"></div>
     <p class="small">Jede gewählte Seite wird unten angehängt und belegt die linke Hälfte der Breite; die Fläche wird dafür verlängert.
     Qualität: „Mittel“ reicht für Beamer und Druck meist aus, „Hoch“ nur bei sehr kleiner Schrift, „Klein“ für möglichst kleine Dateien.</p>
+  </div>
+</div>
+
+<div id="dlgSvgIn" class="dlg wide">
+  <div class="dlg-head">SVG-Code als Bild einfügen <button class="x">×</button></div>
+  <div class="dlg-body">
+    <p class="small">SVG-Code hier hineinkopieren – auch direkt aus einem KI-Chat mit den <code>```svg</code>-Zeilen. Er wird als Bild eingefügt (verschieben und skalieren ja, einzelne Striche bearbeiten nein). Für bearbeitbare Striche die SVG stattdessen als Datei öffnen (O).</p>
+    <textarea id="svgCodeIn" spellcheck="false" wrap="off" placeholder="<svg xmlns=&quot;http://www.w3.org/2000/svg&quot; viewBox=&quot;…&quot;> … </svg>"></textarea>
+    <p id="svgInErr" class="small err"></p>
+    <div class="row img-bar"><span class="spacer"></span><button id="svgInCancel">Abbrechen</button><button id="svgInGo" class="primary" title="Strg+Enter">Einfügen</button></div>
   </div>
 </div>
 
