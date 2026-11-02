@@ -11,13 +11,14 @@
      Strich: {id, t:'s', pts:[[x,y,p],…], c, w}
      Text:   {id, t:'t', x, y, s, c, txt, tw?, b?}   (tw = feste Breite, b:1 = Rahmen, ab v9.1)
      Bild:   {id, t:'i', x, y, w, h, href}
+     HTML:   {id, t:'h', x, y, w, h, bw, oy, oh, html}   (ab v9.5: Ausschnitt oy/oh eines bei Breite bw gesetzten HTML)
    Jede Änderung erzeugt neue Objekte bzw. ein neues Array -> Undo = Array-Referenzen. */
 (() => {
 'use strict';
 
 // ===================================================================== Grundlagen
 const NS = 'http://www.w3.org/2000/svg', XH = 'http://www.w3.org/1999/xhtml';
-const VERSION = '2026-10-29a';
+const VERSION = '2026-11-02b';
 const COLORS = ['#FFFFFF','#000000','#DDDDDD','#CC6677','#882255','#117733','#88CCEE','#332288','#999933','#DDCC77'];
 const TEXT_FONT = 'system-ui,"Segoe UI",Arial,sans-serif';
 const $ = id => document.getElementById(id);
@@ -280,6 +281,9 @@ function buildNode(el) {
     if (el.hl) hlStyle(n);
   } else if (el.t === 'i') {
     n = mk('image', { class: 'i', x: el.x, y: el.y, width: el.w, height: el.h, preserveAspectRatio: 'none', href: el.href });
+  } else if (el.t === 'h') {             // v9.5: HTML-Abschnitt
+    n = mk('foreignObject', { class: 'h', x: el.x, y: el.y, width: el.w, height: el.h, 'data-bw': el.bw, 'data-oy': el.oy, 'data-oh': el.oh });
+    n.appendChild(htmlBox(el));
   } else {
     n = mk('foreignObject', { class: 't', x: el.x, y: el.y, width: 10, height: 10, 'data-s': el.s, 'data-c': el.c, 'data-txt': el.txt });
     const div = document.createElementNS(XH, 'div');
@@ -603,7 +607,7 @@ function rotate(cw) {
 function setColor(c) {
   color = c; syncPanel();
   if (editing) { editing.c = c; ta.style.color = c; placeEditor(); sendEditPreview(); return; }
-  const list = selList().filter(e => e.t !== 'i');
+  const list = selList().filter(e => e.t !== 'i' && e.t !== 'h');
   if (list.length && mode === 'select') change(replaceEls(new Map(list.map(e => [e.id, { ...e, c }]))));
 }
 // v9.1: Rahmen für Textfelder. Wirkt auf das gerade bearbeitete Textfeld, sonst auf die
@@ -633,7 +637,7 @@ function toggleFrame() {
   toast(textFrame ? 'Neue Textfelder mit Rahmen' : 'Neue Textfelder ohne Rahmen', 1300);
 }
 function bigger(f, which) { // which: 'stroke' | 'text' | undefined(auto)
-  const list = selList().filter(e => e.t !== 'i');
+  const list = selList().filter(e => e.t !== 'i' && e.t !== 'h');
   if (list.length && mode === 'select' && !which) {
     change(replaceEls(new Map(list.map(e => [e.id, e.t === 's' ? { ...e, w: r2(clamp(e.w * f, .3, 80)) } : { ...e, s: r1(clamp(e.s * f, 4, 400)) }]))));
     return;
@@ -1278,7 +1282,7 @@ const ACTIONS = {
   extend: () => change(els, Math.ceil(H + cont.clientHeight / scale() * .5)),
   clip: clipPage,
   image: () => $('imgInput').click(), svgin: openSvgIn, imgq: cycleImgPref, optimg: optimizeImages,
-  grid: cycleGrid, fmt: toggleFormat, arrange: arrangeForPrint, pbreak: () => setMode(mode === 'pbreak' ? 'draw' : 'pbreak'), pdf: () => $('pdfInput').click(),
+  grid: cycleGrid, fmt: toggleFormat, arrange: arrangeForPrint, pbreak: () => setMode(mode === 'pbreak' ? 'draw' : 'pbreak'), pdf: () => $('pdfInput').click(), html: () => $('htmlInput').click(), htmlclip: pasteHtmlClipboard, copyimg: copyBoardImage,
   print: doPrint,
   newb: newBoard, open: openFile, save: () => save(false), saveAs: () => save(true), compact: exportCompact, svgcode: showSvgCode,
   backups: showBackups, backupNow: () => { backup(true); },
@@ -1300,18 +1304,18 @@ const GROUPS = [
   ['sel', 'Auswahl bearbeiten', [['copy', '⧉', 'Kopieren'], ['cut', '✂', 'Ausschneiden'], ['all', '▣', 'Alles auswählen'],
       ['straight', '╱', 'Gerade'], ['arc', '◠', 'Kreisbogen'], ['flat', '〰', 'Glätten'],
       ['rotR', '↻', 'Drehen rechts'], ['rotL', '↺', 'Drehen links'], ['selUp', '⤢', 'Größer'], ['selDown', '⤡', 'Kleiner']]],
-  ['ins', 'Einfügen', [['paste', '📋', 'Aus Zwischenablage'], ['image', '🖼', 'Bild'], ['svgin', '&lt;/&gt;', 'SVG-Code als Bild'], ['pdf', '📄', 'PDF-Seiten'],
+  ['ins', 'Einfügen', [['paste', '📋', 'Aus Zwischenablage'], ['image', '🖼', 'Bild'], ['svgin', '&lt;/&gt;', 'SVG-Code als Bild'], ['pdf', '📄', 'PDF-Seiten'], ['html', '🌐', 'HTML-Seite'], ['htmlclip', '⎘', 'HTML aus Zwischen­ablage'],
       ['imgq', '⚖', 'Bildgröße: fragen'], ['optimg', '🗜', 'Bilder verkleinern']]],
   ['page', 'Seite & Druck', [['grid', '▦', 'Gitter: aus'], ['fmt', '▯', 'Format: Hoch'], ['extend', '⇣', 'Verlängern'], ['clip', '⇡', 'Auf Inhalt kürzen'],
       ['arrange', '⇅', 'Für Druck anordnen'], ['pbreak', '⤓', 'Fester Umbruch'], ['print', '⎙', 'Drucken / PDF']]],
-  ['file', 'Datei', [['newb', '✦', 'Neu'], ['saveAs', '⇲', 'Speichern unter'], ['compact', '⇩', 'Export klein'], ['svgcode', '&lt;/&gt;', 'SVG-Code'],
+  ['file', 'Datei', [['newb', '✦', 'Neu'], ['saveAs', '⇲', 'Speichern unter'], ['compact', '⇩', 'Export klein'], ['svgcode', '&lt;/&gt;', 'SVG-Code'], ['copyimg', '📷', 'Als Bild kopieren'],
       ['backups', '🕘', 'Backups'], ['backupNow', '⟳', 'Backup jetzt']]],
   ['extra', 'Extras', [['mirror', '⧉', 'Zweites Fenster'], ['follow', '⇵', 'Scrollen koppeln'], ['finger', '☝', 'Finger zeichnet'],
       ['calc', '∑', 'Rechner'], ['help', '?', 'Hilfe']]],
 ];
 const KEYHINT = { draw: 'S', select: 'A', text: 'T', erase: 'D', erase2: 'Shift+D', undo: 'Z', redo: 'Y', del: 'Rücktaste', copy: 'C', cut: 'X',
   paste: 'Strg+V', all: 'Strg+A', straight: 'H', arc: 'K', mirror: 'F', rotR: 'R', rotL: 'L', thicker: '+', thinner: '−', extend: 'E',
-  clip: 'Strg+E', image: 'P', svgin: 'Shift+P', grid: 'G', pdf: 'I', arrange: 'N', pbreak: 'U', print: 'Strg+P', open: 'O', save: 'Strg+S', saveAs: 'Strg+Shift+S', backups: 'B',
+  clip: 'Strg+E', image: 'P', svgin: 'Shift+P', grid: 'G', pdf: 'I', html: 'Shift+I', htmlclip: 'Strg+Shift+V', copyimg: 'Shift+C', arrange: 'N', pbreak: 'U', print: 'Strg+P', open: 'O', save: 'Strg+S', saveAs: 'Strg+Shift+S', backups: 'B',
   backupNow: 'Strg+B', calc: 'J', help: 'F1', fontUp: 'Schrift größer', fontDown: 'Schrift kleiner', frame: 'M', zoomIn: 'Strg++', zoomOut: 'Strg+−', zoomFit: 'Strg+0' };
 
 let hlMode = false;                        // Stufe 3 = Textmarker
@@ -1455,7 +1459,9 @@ document.addEventListener('keydown', e => {
       case 'a': selectAll(); break;
       case 'c': copySel(false); break;
       case 'x': copySel(true); break;
-      case 'v': handled = false; break;               // -> paste-Ereignis
+      case 'v':                                       // -> paste-Ereignis; v9.6: Strg+Shift+V = als HTML-Seite
+        if (e.shiftKey) { htmlPasteAt = performance.now(); setTimeout(() => { if (htmlPasteAt) pasteHtmlClipboard(); }, 400); }
+        handled = false; break;
       case '+': case '=': zoomStep(1); break;         // v9.3: Zoom statt Browser-Zoom
       case '-': zoomStep(-1); break;
       case '0': zoomFit(); break;
@@ -1471,7 +1477,7 @@ document.addEventListener('keydown', e => {
     case 'y': redo(); break;
     case 's': setMode('draw'); break;              // v9.2: S = Stift (Speichern nur noch Strg+S)
     case 'o': openFile(); break;
-    case 'c': copySel(false); break;
+    case 'c': if (e.shiftKey) copyBoardImage(); else copySel(false); break;   // v9.6: Shift+C = als Bild kopieren
     case 'x': copySel(true); break;
     case 'v': pasteInternal(); break;
     case 'Backspace': case 'Delete': deleteSel(); break;
@@ -1481,7 +1487,7 @@ document.addEventListener('keydown', e => {
     case 'a': setMode('select'); break;            // v9.2: A = Auswahl
     case 'n': arrangeForPrint(); break;            // v9.2: N = für Druck anordnen (vorher A)
     case 'u': ACTIONS.pbreak(); break;
-    case 'i': $('pdfInput').click(); break;
+    case 'i': if (e.shiftKey) $('htmlInput').click(); else $('pdfInput').click(); break;   // v9.5: Shift+I = HTML-Seite
     case 'h': ACTIONS.straight(); break;
     case 'k': ACTIONS.arc(); break;
     case 'f': openMirror(); break;            // F = zweites Fenster (Glätten nur noch über das Menü)
@@ -1516,6 +1522,12 @@ document.addEventListener('paste', async e => {
   if (isTyping(e)) return;
   e.preventDefault();
   const dt = e.clipboardData;
+  if (htmlPasteAt && performance.now() - htmlPasteAt < 1500) {     // v9.6: Strg+Shift+V
+    htmlPasteAt = 0;
+    const src = dt ? htmlFromClip(dt.getData('text/html'), dt.getData('text/plain')) : '';
+    if (src) importHtmlText(src); else pasteHtmlClipboard();
+    return;
+  }
   if (dt) {
     for (const it of dt.items) if (it.kind === 'file' && it.type.startsWith('image/')) { await insertImageFile(it.getAsFile()); return; }
     const txt = dt.getData('text/plain');
@@ -1608,15 +1620,15 @@ function serialize(compact) {
     c.insertBefore(bg, c.firstChild);
   } else {
     const cls = new Map(); let css = '';
-    c.querySelectorAll('[data-pts],[data-w],[data-txt],[data-s],[data-c],[data-tw],[data-hl],[data-b]').forEach(n => {
-      ['data-pts', 'data-w', 'data-txt', 'data-s', 'data-c', 'data-tw', 'data-hl', 'data-b'].forEach(a => n.removeAttribute(a));
+    c.querySelectorAll('[data-pts],[data-w],[data-txt],[data-s],[data-c],[data-tw],[data-hl],[data-b],[data-bw],[data-oy],[data-oh]').forEach(n => {
+      ['data-pts', 'data-w', 'data-txt', 'data-s', 'data-c', 'data-tw', 'data-hl', 'data-b', 'data-bw', 'data-oy', 'data-oh'].forEach(a => n.removeAttribute(a));
     });
     c.querySelectorAll('path.s').forEach(n => {
       const f = n.getAttribute('fill');
       if (!cls.has(f)) { const k = 'c' + cls.size; cls.set(f, k); css += `.${k}{fill:${f}}`; }
       n.removeAttribute('fill'); n.setAttribute('class', cls.get(f));
     });
-    c.querySelectorAll('.t,.i').forEach(n => n.removeAttribute('class'));
+    c.querySelectorAll('.t,.i,.h').forEach(n => n.removeAttribute('class'));
     c.querySelectorAll('g[id]').forEach(g => g.removeAttribute('id'));
     if (css) { const st = mk('style'); st.textContent = css; c.insertBefore(st, c.firstChild); }
     const bg = mk('rect', { width: '100%', height: '100%', fill: '#fff' });
@@ -1645,6 +1657,14 @@ function parseBoard(text) {
       let href = n.getAttribute('href') || n.getAttributeNS('http://www.w3.org/1999/xlink', 'href') || '';
       if (href[0] === '#') { if (!shared.has(href)) shared.set(href, sharedImageHref(root, href)); href = shared.get(href); }
       if (/^data:image\//.test(href)) out.push({ id: nid(), t: 'i', x: num(n, 'x'), y: num(n, 'y'), w: num(n, 'width', 100), h: num(n, 'height', 100), href });
+    } else if (cl === 'h') {                                     // v9.5: HTML-Abschnitt (HTML-Text über das Live-Dokument zurückgewinnen)
+      const inner = n.firstElementChild && n.firstElementChild.firstElementChild;
+      if (inner) {
+        const tmp = document.createElement('div');
+        for (const ch of [...inner.childNodes]) tmp.appendChild(document.importNode(ch, true));
+        out.push({ id: nid(), t: 'h', x: num(n, 'x'), y: num(n, 'y'), w: num(n, 'width', 100), h: num(n, 'height', 100),
+          bw: num(n, 'data-bw', 730), oy: num(n, 'data-oy'), oh: num(n, 'data-oh', 100), html: tmp.innerHTML });
+      }
     } else if (cl === 't') {
       const t = { id: nid(), t: 't', x: num(n, 'x'), y: num(n, 'y'), s: num(n, 'data-s', 28), c: n.getAttribute('data-c') || '#000000', txt: n.getAttribute('data-txt') || '' };
       const tw = num(n, 'data-tw', 0); if (tw > 0) t.tw = tw;
@@ -1860,6 +1880,7 @@ cont.addEventListener('dragover', e => e.preventDefault());
 cont.addEventListener('drop', async e => {
   e.preventDefault();
   const f = e.dataTransfer.files[0];
+  if (f && [...e.dataTransfer.files].some(isHtmlFile)) { importHtmlFiles(e.dataTransfer.files); return; }   // v9.5
   if (f) {
     if (/\.pdf$/i.test(f.name) || f.type === 'application/pdf') { openPdf(f); return; }
     if (/\.svg$/i.test(f.name)) loadText(await f.text(), f.name, null);
@@ -2077,6 +2098,259 @@ $('pdfNone').addEventListener('click', () => { pdfSel.clear(); pdfSync(); });
 $('pdfRange').addEventListener('input', e => { if (pdfDoc && e.target.value.trim()) { pdfSel = parseRange(e.target.value, pdfDoc.numPages); pdfSync(); } });
 $('pdfRange').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); importPdfPages(); } });
 $('pdfGo').addEventListener('click', importPdfPages);
+
+// ===================================================================== HTML-Import (v9.5)
+// HTML-Datei als lebendes HTML (<foreignObject>) einfügen – wie PDF-Seiten: unter dem bisherigen Inhalt,
+// linke Hälfte, je Druckseite ein Abschnitt, Fläche wird nach unten verlängert. Text bleibt scharf.
+// Bereinigt: Skripte, Ereignis-Attribute, externe Stylesheets/Frames. Das CSS der Datei wird auf eine eigene
+// Klasse (wbh-…) begrenzt und Medienabfragen werden einmal für die Satzbreite ausgewertet – so verändert es
+// weder das Board noch andere Abschnitte, und der Umbruch bleibt bei jeder Fenstergröße gleich.
+const HTML_BASE = 'font:16px/1.45 system-ui,"Segoe UI",Arial,sans-serif;color:#000;text-align:left;white-space:normal;letter-spacing:normal;word-spacing:normal;';
+const isHtmlFile = f => /\.x?html?$/i.test(f.name) || f.type === 'text/html';
+function htmlBox(el) {                          // Abschnitt: bei Breite bw gesetzt, Ausschnitt oy/oh, auf w×h skaliert
+  const box = document.createElementNS(XH, 'div'), inner = document.createElementNS(XH, 'div');
+  const sx = +(el.w / el.bw).toFixed(5), sy = +(el.h / el.oh).toFixed(5);
+  box.setAttribute('class', 'wbh');
+  box.setAttribute('style', `display:flow-root;position:relative;overflow:hidden;width:${el.bw}px;height:${el.oh}px;background:#fff;`
+    + `outline:1px solid #b0b0b0;outline-offset:-1px;transform-origin:0 0;transform:scale(${sx},${sy});${HTML_BASE}`);
+  inner.setAttribute('style', `position:relative;top:${-el.oy}px`);
+  inner.innerHTML = el.html;
+  box.appendChild(inner);
+  return box;
+}
+async function readHtmlFile(file) {             // Zeichensatz aus BOM bzw. <meta charset> (sonst UTF-8)
+  const buf = new Uint8Array(await file.arrayBuffer());
+  let cs = 'utf-8';
+  if (!(buf[0] === 0xEF && buf[1] === 0xBB && buf[2] === 0xBF)) {
+    const m = new TextDecoder('windows-1252').decode(buf.subarray(0, 4096)).match(/<meta[^>]+charset\s*=\s*["']?\s*([\w-]+)/i);
+    if (m) cs = m[1].toLowerCase();
+  }
+  try { return new TextDecoder(cs).decode(buf); } catch (e) { return new TextDecoder('utf-8').decode(buf); }
+}
+function splitSelectors(s) {                    // Kommas nur auf oberster Ebene trennen (nicht in :is(…), [a=","])
+  const out = []; let d = 0, cur = '';
+  for (const ch of s) {
+    if (ch === '(' || ch === '[') d++; else if (ch === ')' || ch === ']') d--;
+    if (ch === ',' && !d) { out.push(cur); cur = ''; } else cur += ch;
+  }
+  out.push(cur);
+  return out.map(x => x.trim()).filter(Boolean);
+}
+function scopeSelector(s, sc) {                 // html/:root/body -> eigene Klasse, alles andere darunter
+  s = s.replace(/^(?::root|html)(?![\w-])\s*/i, '').replace(/^>\s*/, '');
+  if (/^body(?![\w-])/i.test(s)) s = s.slice(4);
+  else if (s) return `.${sc} ${s}`;
+  return `.${sc}${s}`;
+}
+function scopeCss(rules, sc, mm) {
+  let out = '';
+  for (const r of rules) {
+    if (r instanceof CSSStyleRule) out += splitSelectors(r.selectorText).map(s => scopeSelector(s, sc)).join(',') + '{' + r.style.cssText + '}';
+    else if (r instanceof CSSMediaRule) { if (mm(r.media.mediaText)) out += scopeCss(r.cssRules, sc, mm); }   // passende Regeln fest übernehmen
+    else if (r instanceof CSSSupportsRule) out += `@supports ${r.conditionText}{${scopeCss(r.cssRules, sc, mm)}}`;
+    else if (window.CSSLayerBlockRule && r instanceof CSSLayerBlockRule) out += `@layer ${r.name}{${scopeCss(r.cssRules, sc, mm)}}`;
+    else if (r instanceof CSSImportRule || r instanceof CSSPageRule) continue;    // @page würde den Board-Druck verändern
+    else out += r.cssText;                                                         // @font-face, @keyframes …
+  }
+  return out;
+}
+function cleanHtml(text, pics, mm) {            // -> { html, missing }
+  text = text.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '');                         // in XML (SVG-Datei) nicht erlaubt
+  const doc = new DOMParser().parseFromString(text, 'text/html');
+  const sc = 'wbh-' + Math.random().toString(36).slice(2, 8);
+  // Browser-Grundwerte nachbilden (das Board setzt box-sizing:border-box für alles; Seitenrand wie <body>)
+  let css = `.${sc},.${sc} *{box-sizing:content-box}.${sc}{margin:8px}`;
+  for (const st of doc.querySelectorAll('style')) {
+    try { const sh = new CSSStyleSheet(); sh.replaceSync(st.textContent); css += scopeCss(sh.cssRules, sc, mm); } catch (e) { /* CSS nicht lesbar */ }
+    st.remove();
+  }
+  doc.querySelectorAll('script,noscript,iframe,frame,frameset,object,embed,applet,link,meta,base,title,template,dialog').forEach(n => n.remove());
+  const cw = doc.createTreeWalker(doc, NodeFilter.SHOW_COMMENT), cm = [];
+  for (let c; (c = cw.nextNode());) cm.push(c);
+  cm.forEach(c => c.remove());
+  let missing = 0;
+  for (const n of doc.body.querySelectorAll('*')) {
+    for (const a of [...n.attributes]) {
+      const nm = a.name.toLowerCase();
+      if (nm.startsWith('on') || nm === 'srcset' || nm === 'loading' || nm === 'autofocus'
+          || (!a.namespaceURI && !/^[a-zA-Z_][\w.-]*$/.test(a.name))               // z. B. @click – in XML ungültig
+          || (/^(href|src|action|formaction|xlink:href)$/.test(nm) && /^\s*(javascript|vbscript):/i.test(a.value))) n.removeAttribute(a.name);
+    }
+    if (n.localName === 'img') {
+      const src = (n.getAttribute('src') || '').trim();
+      if (/^(data:image\/|https?:)/i.test(src)) continue;
+      let key = '';
+      try { key = decodeURIComponent(src.split(/[?#]/)[0].split(/[\\/]/).pop()).toLowerCase(); } catch (e) {}
+      if (key && pics.has(key)) n.setAttribute('src', pics.get(key)); else { n.remove(); missing++; }
+    }
+  }
+  const b = doc.body, cls = (b.getAttribute('class') || '').trim(), bst = b.getAttribute('style') || '';
+  return { missing, html: `<style>${css.replace(/</g, '\\3c ')}</style><div class="${sc}${cls ? ' ' + escHTML(cls) : ''}"`
+    + `${bst ? ` style="${escHTML(bst)}"` : ''}>${b.innerHTML}</div>` };
+}
+async function measureHtml(html, bw) {          // Gesamthöhe und Zeilen-/Bildkanten (für saubere Schnitte)
+  const box = htmlBox({ bw, oh: 1, w: bw, h: 1, oy: 0, html });
+  Object.assign(box.style, { height: 'auto', position: 'absolute', left: '-30000px', top: '0', visibility: 'hidden', transform: 'none' });
+  document.body.appendChild(box);
+  try {
+    const imgs = [...box.querySelectorAll('img')];
+    await Promise.race([Promise.all(imgs.map(im => im.complete ? null : new Promise(r => { im.addEventListener('load', r); im.addEventListener('error', r); }))),
+                        new Promise(r => setTimeout(r, 5000))]);
+    try { await document.fonts.ready; } catch (e) {}
+    await nextFrame();
+    const top = box.getBoundingClientRect().top, rects = [];
+    let hc = box.getBoundingClientRect().height;
+    const tw = document.createTreeWalker(box, NodeFilter.SHOW_TEXT), rg = document.createRange();
+    for (let t; (t = tw.nextNode());) {
+      if (!t.data.trim() || (t.parentNode && t.parentNode.localName === 'style')) continue;
+      rg.selectNodeContents(t);
+      for (const r of rg.getClientRects()) if (r.height > 0) rects.push([r.top - top, r.bottom - top]);
+    }
+    for (const n of box.querySelectorAll('img,svg,video,canvas,hr,math,input,textarea,select,button')) {
+      const r = n.getBoundingClientRect(); if (r.height > 0) rects.push([r.top - top, r.bottom - top]);
+    }
+    for (const q of rects) if (q[1] > hc) hc = q[1];
+    return { h: Math.ceil(hc), rects };
+  } finally { box.remove(); }
+}
+function htmlCut(rects, limit, min) {           // höchste Schnittkante <= limit, die keine Zeile/kein Bild zerteilt
+  let y = limit;
+  for (let guard = 0; guard < 2000; guard++) {
+    let moved = false;
+    for (const [a, b] of rects) if (a < y - .5 && b > y + .5) { y = a; moved = true; }
+    if (!moved || y < min) break;
+  }
+  return y < min ? limit : Math.floor(y);
+}
+async function importHtmlFiles(list) {
+  const files = [...list], main = files.find(isHtmlFile);
+  if (!main) return toast('Keine HTML-Datei ausgewählt');
+  const pics = new Map();                       // mit ausgewählte Bilder ersetzen relative <img src="…">
+  for (const f of files) if (f !== main && /^image\//.test(f.type)) { try { pics.set(f.name.toLowerCase(), await readAsDataURL(f)); } catch (e) {} }
+  let text;
+  try { text = await readHtmlFile(main); } catch (e) { return toast('HTML-Datei konnte nicht gelesen werden', 3000); }
+  return importHtmlText(text, pics);
+}
+async function importHtmlText(text, pics = new Map()) {   // v9.6: auch für HTML aus der Zwischenablage
+  if (editing) commitEdit();
+  toast('HTML-Seite wird gesetzt …', 60000);
+  const bw = Math.round(W / 2), w = r1(W / 2), k = w / bw, ph = pageH();
+  const fr = document.createElement('iframe');  // Medienabfragen für die Satzbreite auswerten, nicht für das Fenster
+  fr.style.cssText = `position:absolute;left:-30000px;top:0;width:${bw}px;height:${Math.round(ph)}px;border:0;visibility:hidden`;
+  document.body.appendChild(fr);
+  let res, m;
+  try {
+    const mm = q => { try { return fr.contentWindow.matchMedia(q).matches; } catch (e) { return !/print/i.test(q); } };
+    res = cleanHtml(text, pics, mm);
+    m = await measureHtml(res.html, bw);
+  } catch (err) { console.warn(err); return toast('HTML-Seite konnte nicht gesetzt werden', 3000); }
+  finally { fr.remove(); }
+  if (m.h < 2) return toast('Die HTML-Datei hat keinen sichtbaren Inhalt', 2500);
+  // Platzierung wie beim PDF-Import: tatsächliche Seitenanfänge, nach unten fortgesetzt
+  const starts = [0, ...pageBreaks()];
+  const pageOf = yy => { while (starts[starts.length - 1] + ph <= yy) starts.push(starts[starts.length - 1] + ph);
+    let i = starts.length - 1; while (starts[i] > yy) i--; return [starts[i], starts[i + 1] !== undefined ? starts[i + 1] : starts[i] + ph]; };
+  const cb = unionBox(els), add = [];
+  let y = cb ? cb.y + cb.h + 20 : 0, oy = 0;
+  if (pageFmt === 'landscape' && cb) y = pageOf(cb.y + cb.h)[1] + 2;              // Querformat: neue Druckseite
+  while (oy < m.h - .5 && add.length < 500) {
+    const [a, e] = pageOf(y), room = (e - y - 4) / k, rest = m.h - oy;
+    if (rest > room && room < ph * .25 / k && y > a + 3) { y = e + 2; continue; } // zu wenig Platz: nächste Druckseite
+    let oh = rest <= room ? rest : htmlCut(m.rects, oy + room, oy + room * .5) - oy;
+    if (!(oh >= 1)) oh = Math.min(rest, room);
+    add.push({ id: nid(), t: 'h', x: 0, y: r1(y), w, h: r1(oh * k), bw, oy: r1(oy), oh: r1(oh), html: res.html });
+    oy += oh; y = e + 2;                                                            // nächster Abschnitt: nächste Druckseite
+  }
+  const last = add[add.length - 1];
+  change([...els, ...add], Math.max(H, Math.ceil(pageOf(last.y + last.h - 1)[1])));
+  sel.clear(); drawUi();
+  cont.scrollTop = add[0].y * scale() - 10;
+  toast(`HTML-Seite eingefügt (${add.length} Abschnitt${add.length > 1 ? 'e' : ''})`
+    + (res.missing ? ` · ${res.missing} Bild(er) fehlen – beim Einfügen die Bilddateien mit auswählen` : ''), res.missing ? 6000 : 2500);
+}
+// ---- v9.6: HTML aus der Zwischenablage (Strg+Shift+V bzw. „Einfügen → HTML aus Zwischenablage“)
+// Strg+V bleibt unverändert (Text -> Textfeld). Steht HTML-Quelltext als Text in der Zwischenablage
+// (z. B. aus einem KI-Chat, auch mit ```html-Zeilen), wird dieser gesetzt, sonst der kopierte formatierte Inhalt.
+const HTML_SRC = /^\s*(```html?[^\n]*\n)?\s*(<!doctype html|<html[\s>]|<head[\s>]|<body[\s>]|<style[\s>])/i;
+function htmlFromClip(html, txt) {              // -> HTML-Text oder ''
+  html = html || ''; txt = txt || '';
+  if (HTML_SRC.test(txt)) return txt.replace(/^\s*```html?[^\n]*\n/i, '').replace(/\n?```\s*$/, '');
+  if (html.trim()) return html;
+  if (/<([a-z][\w-]*)[\s>][\s\S]*<\/\1\s*>/i.test(txt)) return txt;              // HTML-Schnipsel als Text
+  return '';
+}
+let htmlPasteAt = 0;                            // Strg+Shift+V gedrückt -> nächstes paste-Ereignis als HTML
+async function pasteHtmlClipboard() {           // Panel-Knopf bzw. Ersatz, wenn das paste-Ereignis kein HTML liefert
+  htmlPasteAt = 0;
+  let html = '', txt = '';
+  try {
+    for (const it of await navigator.clipboard.read()) {
+      if (!html && it.types.includes('text/html')) html = await (await it.getType('text/html')).text();
+      if (!txt && it.types.includes('text/plain')) txt = await (await it.getType('text/plain')).text();
+    }
+  } catch (err) { return toast('Kein Zugriff auf die Zwischenablage – Strg+Shift+V direkt auf der Tafel verwenden', 3500); }
+  const src = htmlFromClip(html, txt);
+  if (!src) return toast('Kein HTML in der Zwischenablage', 2000);
+  importHtmlText(src);
+}
+
+// ===================================================================== Als Bild kopieren (v9.6)
+// Auswahl bzw. ganzer Inhalt (auf den Inhalt zugeschnitten) -> PNG in die Zwischenablage. Browser erlauben dort
+// nur PNG; Word, PowerPoint usw. erhalten beim Einfügen ein normales Bild. Klappt das nicht: JPG-Download.
+const SNAP_CSS = '.wbt .katex-display{display:block;margin:.2em 0}.wbt math{font-size:1.05em}';
+const canvasBlob = (cv, type, q) => new Promise((res, rej) => cv.toBlob(b => b ? res(b) : rej(new Error('leer')), type, q));
+async function boardCanvas() {                  // -> Canvas oder null (nichts da)
+  if (editing) commitEdit();
+  const list = sel.size ? selList() : els;
+  if (!list.length) return null;
+  const b = unionBox(list), pad = 12;
+  const x0 = Math.max(0, Math.floor(b.x - pad)), y0 = Math.max(0, Math.floor(b.y - pad));
+  const w = Math.max(1, Math.min(W, Math.ceil(b.x + b.w + pad)) - x0), h = Math.max(1, Math.ceil(b.y + b.h + pad) - y0);
+  const f = Math.min(2, 16000 / w, 16000 / h, Math.sqrt(1.2e8 / (w * h)));     // doppelte Auflösung, Grenzen der Browser-Canvas
+  const cw = Math.max(1, Math.round(w * f)), ch = Math.max(1, Math.round(h * f));
+  const s = document.createElementNS(NS, 'svg');
+  s.setAttribute('viewBox', `${x0} ${y0} ${w} ${h}`); s.setAttribute('width', cw); s.setAttribute('height', ch);
+  mk('style', null, s).textContent = SNAP_CSS;
+  mk('rect', { x: x0, y: y0, width: w, height: h, fill: '#fff' }, s);
+  const ids = new Set(list.map(e => e.id));
+  for (const layer of [gInk, gTxt]) {
+    const g = mk('g', null, s);
+    for (const n of layer.children) if (n._el && ids.has(n._el.id)) { const c = n.cloneNode(true); c.style.visibility = ''; g.appendChild(c); }
+  }
+  // data:-URL statt Blob-URL: Chrome sperrt die Canvas bei Blob-URLs mit <foreignObject> (Texte, HTML) für den Export
+  const url = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(new XMLSerializer().serializeToString(s));
+  const img = new Image();
+  await new Promise((res, rej) => { img.onload = res; img.onerror = () => rej(new Error('SVG nicht darstellbar')); img.src = url; });
+  const cv = document.createElement('canvas'); cv.width = cw; cv.height = ch;
+  const ctx = cv.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, cw, ch); ctx.drawImage(img, 0, 0, cw, ch);
+  return cv;
+}
+async function copyBoardImage() {
+  const what = sel.size ? 'Auswahl' : 'Board';
+  const cvP = boardCanvas();
+  cvP.catch(() => {});
+  try {
+    if (!navigator.clipboard || !navigator.clipboard.write || !window.ClipboardItem) throw new Error('keine Zwischenablage');
+    // Promise direkt übergeben: der Schreibzugriff beginnt noch innerhalb der Benutzeraktion
+    const pngP = cvP.then(cv => { if (!cv) throw new Error('leer'); return canvasBlob(cv, 'image/png'); });
+    pngP.catch(() => {});                       // Fehler werden unten behandelt
+    await navigator.clipboard.write([new ClipboardItem({ 'image/png': pngP })]);
+    const cv = await cvP;
+    toast(`${what} als Bild kopiert (${cv.width} × ${cv.height} px) – mit Strg+V z. B. in Word oder PowerPoint einfügen`, 3000);
+  } catch (err) {
+    let cv = null;
+    try { cv = await cvP; } catch (e) { console.warn(e); return toast('Bild konnte nicht erzeugt werden', 3000); }
+    if (!cv) return toast('Nichts zu kopieren');
+    try {
+      const url = URL.createObjectURL(await canvasBlob(cv, 'image/jpeg', .9)), name = (fileName || 'terbiboard').replace(/\.svg$/i, '') + `_${stamp()}.jpg`;
+      const a = document.createElement('a'); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 2000);
+      toast(`Zwischenablage nicht verfügbar – Bild als JPG heruntergeladen (${name})`, 3500);
+    } catch (e) { toast('Bild konnte nicht erzeugt werden (Sicherheitssperre des Browsers)', 3500); }
+  }
+}
+
+$('htmlInput').addEventListener('change', e => { const fs = [...e.target.files]; e.target.value = ''; if (fs.length) importHtmlFiles(fs); });
 
 // ===================================================================== Zweites Fenster (Live-Spiegelung)
 // Kopplung per postMessage (funktioniert auch bei file://). Elemente sind unveränderlich:

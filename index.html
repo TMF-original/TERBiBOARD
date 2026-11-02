@@ -68,6 +68,8 @@
       <dt>Leertaste</dt><dd>Zwischen Stift und Auswahl wechseln</dd>
       <dt>T</dt><dd>Text-Werkzeug: Klick setzt ein Textfeld (Formeln mit <code>$…$</code> bzw. <code>$$…$$</code>)</dd>
       <dt>Strg+V</dt><dd>Aus der Zwischenablage einfügen: Bild → Bild, SVG-Code → Bild, Text → neues Textfeld</dd>
+      <dt>Strg+Shift+V</dt><dd>HTML aus der Zwischenablage als HTML-Seite einfügen (wie Shift+I): kopierte Webseiten-Inhalte oder HTML-Quelltext, z. B. aus einem KI-Chat (```html-Zeilen erlaubt). Auch Panel „Einfügen → HTML aus Zwischenablage“.</dd>
+      <dt>Shift+C</dt><dd>Als Bild kopieren (Panel „Datei → Als Bild kopieren“): die Auswahl, sonst den ganzen Inhalt, als Bild in die Zwischenablage – mit Strg+V z. B. in Word oder PowerPoint einfügen. Geht die Zwischenablage nicht, wird ein JPG heruntergeladen.</dd>
       <dt>Doppelklick</dt><dd>Textfeld bearbeiten (in Auswahl- oder Text-Werkzeug)</dd>
       <dt>Strg+Enter / Esc</dt><dd>Textbearbeitung beenden</dd>
       <dt>Z / Strg+Z</dt><dd>Rückgängig &nbsp;·&nbsp; <b>Y / Strg+Y</b>: Wiederholen</dd>
@@ -88,6 +90,7 @@
       <dt>+ / −</dt><dd>Strichstärke bzw. Schriftgröße der Auswahl ändern</dd>
       <dt>G</dt><dd>Schreibgitter: aus → Linien → Karos (wird nicht gedruckt/gespeichert)</dd>
       <dt>I</dt><dd>PDF-Seiten importieren (Seiten auswählen, je Seite linke Hälfte)</dd>
+      <dt>Shift+I</dt><dd>HTML-Seite einfügen (Panel „Einfügen → HTML-Seite“ oder .html-Datei hineinziehen): bleibt echtes HTML mit scharfem Text, belegt die linke Hälfte, je Druckseite ein Abschnitt. Bilder der Seite im Dateifenster mit auswählen. Skripte werden entfernt; Links sind auf der Tafel nicht anklickbar.</dd>
       <dt>Format</dt><dd>Panel „Seite → Format“: Druck im Hoch- oder Querformat. Gestrichelte Linien zeigen die echten Seitenumbrüche; Umbrüche weichen Bildern, Texten und Strichen nach oben aus.</dd>
       <dt>N</dt><dd>Für Druck anordnen: Blöcke, die ein Umbruch schneiden würde, rutschen auf die nächste Seite; leicht zu hohe Blöcke (bis 150 %) werden eingepasst. Passiert beim Formatwechsel automatisch.</dd>
       <dt>U</dt><dd>Fester Umbruch: Klick setzt eine rote Umbruchlinie, Klick auf eine vorhandene entfernt sie</dd>
@@ -196,6 +199,7 @@
 <div id="printArea"></div>
 <input type="file" id="imgInput" accept="image/png,image/jpeg,image/gif,image/webp,image/svg+xml,.svg" hidden>
 <input type="file" id="pdfInput" accept="application/pdf,.pdf" hidden>
+<input type="file" id="htmlInput" accept=".html,.htm,text/html,image/*" multiple hidden>
 <input type="file" id="svgInput" accept=".svg,image/svg+xml" hidden>
 
 <script src="katex.min.js"></script>

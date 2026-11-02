@@ -104,6 +104,8 @@ body.mode-pbreak #board{cursor:row-resize}
 .wbt{display:inline-block;white-space:pre;line-height:1.25;font-family:system-ui,"Segoe UI",Arial,sans-serif;padding:0;margin:0}
 .wbt .katex-display{display:block;margin:.2em 0}
 .wbt math{font-size:1.05em}
+/* v9.5: HTML-Abschnitte – nur Anzeige, Zeichnen/Auswählen geht durch sie hindurch */
+#board .h,#board .h *{pointer-events:none!important;user-select:none;-webkit-user-select:none}
 textarea.wbedit{position:absolute;left:0;top:0;margin:0;border:1px dashed #186238;outline:none;background:rgba(255,255,255,.9);
   resize:none;overflow:hidden;white-space:pre;line-height:1.25;font-family:system-ui,"Segoe UI",Arial,sans-serif;padding:0 2px;
   transform-origin:0 0;z-index:5;min-width:2em}
