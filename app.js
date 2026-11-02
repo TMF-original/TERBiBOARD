@@ -78,6 +78,7 @@ function viewRect() { // sichtbarer Bereich in logischen Koordinaten
 // ===================================================================== Geometrie
 const hwOf = (w, p) => w * (0.35 + 1.3 * p) / 2;   // halbe Strichbreite bei Druck p
 
+// v9.7: wird nicht mehr verwendet (automatische Glättung abgeschaltet), bleibt für einen möglichen Schalter erhalten
 function chaikin(p) {
   for (let k = 0; k < 2 && p.length > 2; k++) {
     const q = [p[0]];
@@ -103,7 +104,7 @@ function outline(pts, w) {
     const h = Math.max(hwOf(w, first[2]), .6);
     return `M${f(first[0] - h)} ${f(first[1])}a${f(h)} ${f(h)} 0 1 0 ${f(2*h)} 0a${f(h)} ${f(h)} 0 1 0 ${f(-2*h)} 0Z`;
   }
-  const p = chaikin(pts), n = p.length, L = [], R = [];
+  const p = pts, n = p.length, L = [], R = [];   // v9.7: keine automatische Glättung mehr – Strich bleibt exakt wie gezeichnet
   for (let i = 0; i < n; i++) {
     const a = p[Math.max(i - 1, 0)], b = p[Math.min(i + 1, n - 1)];
     const dx = b[0] - a[0], dy = b[1] - a[1], len = Math.hypot(dx, dy) || 1;
@@ -2441,6 +2442,15 @@ function init() {
   else try { if (!localStorage.getItem('wb2.seen')) { localStorage.setItem('wb2.seen', '1'); openDialog('dlgHelp'); } } catch (e) {}
 }
 init();
+// v9.8: Als App installiert, kann TERBiBOARD .svg-Dateien direkt öffnen (Doppelklick / „Öffnen mit“).
+// Der Dateizugriff (handle) bleibt erhalten, Strg+S speichert also in dieselbe Datei.
+if ('launchQueue' in window && !IS_MIRROR) launchQueue.setConsumer(async params => {
+  const h = params.files && params.files[0];
+  if (!h) return;
+  if (dirty && !confirm('Ungespeicherte Änderungen verwerfen und Datei öffnen?')) return;
+  try { const f = await h.getFile(); loadText(await f.text(), f.name, h); }
+  catch (err) { toast('Datei konnte nicht geöffnet werden'); }
+});
 // für Tests/Debugging
 window.WB2 = { get els() { return els; }, get H() { return H; }, get W() { return W; }, serialize, loadText, insertText, setMode, ACTIONS };
 })();
