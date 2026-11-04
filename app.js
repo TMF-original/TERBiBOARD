@@ -18,7 +18,7 @@
 
 // ===================================================================== Grundlagen
 const NS = 'http://www.w3.org/2000/svg', XH = 'http://www.w3.org/1999/xhtml';
-const VERSION = '2026-11-02b';
+const VERSION = '2026-11-04';
 const COLORS = ['#FFFFFF','#000000','#DDDDDD','#CC6677','#882255','#117733','#88CCEE','#332288','#999933','#DDCC77'];
 const TEXT_FONT = 'system-ui,"Segoe UI",Arial,sans-serif';
 const $ = id => document.getElementById(id);
@@ -36,7 +36,7 @@ const ZMIN = .5, ZMAX = 2;
 let zoom = 1;
 try { const z = parseFloat(localStorage.getItem(ZOOM_KEY)); if (z >= ZMIN && z <= ZMAX) zoom = z; } catch (e) {}
 let mode = 'draw';            // draw | select | text | erase
-let color = '#000000', strokeW = 1.5, fontSize = 28;
+let color = '#000000', strokeW = 3, fontSize = 28;   // v9.9: Standard-Stärke mittel
 let textFrame = false;        // v9.1: neue Textfelder mit Rahmen?
 try { textFrame = localStorage.getItem('wb2.frame') === '1'; } catch (e) {}
 let sel = new Set();          // ausgewählte ids
@@ -769,6 +769,7 @@ function commitEdit() {
   else render();
   const b = els.find(e => e.id === ed.id);
   if (b) { const bb = bbox(b); if (bb.y + bb.h + 40 > H) { H = Math.ceil(bb.y + bb.h + 120); applySize(); } }
+  if (backupDue) { backupDue = false; setTimeout(() => { if (editing) backupDue = true; else backup(false); }, 0); }   // v9.9: verschobenes Auto-Backup nachholen
 }
 ta.addEventListener('input', autosize);
 ta.addEventListener('keydown', e => {
@@ -1320,6 +1321,7 @@ const KEYHINT = { draw: 'S', select: 'A', text: 'T', erase: 'D', erase2: 'Shift+
   backupNow: 'Strg+B', calc: 'J', help: 'F1', fontUp: 'Schrift größer', fontDown: 'Schrift kleiner', frame: 'M', zoomIn: 'Strg++', zoomOut: 'Strg+−', zoomFit: 'Strg+0' };
 
 let hlMode = false;                        // Stufe 3 = Textmarker
+function resetPen() { strokeW = 3; hlMode = false; syncPanel(); }   // v9.9: Start/Neu/Öffnen -> mittlere Stärke
 function setWidth(v) {                     // feste Stärke; wirkt bei Auswahl auch auf die gewählten Striche
   strokeW = v; hlMode = v === HL_W;
   const list = selList().filter(e => e.t === 's');
@@ -1574,7 +1576,7 @@ function newBoard() {
   backup(false);
   els = []; mb = []; breakCache = null; sel.clear(); undoStack = []; redoStack = []; fileHandle = null; fileName = null;
   freshSize();
-  cont.scrollTop = 0; applySize(); render(); setDirty(false);
+  cont.scrollTop = 0; applySize(); render(); setDirty(false); resetPen();
 }
 function freshSize() {
   W = STD_W;                                      // v9.3: feste Breite statt Fensterbreite
@@ -1805,6 +1807,7 @@ function importVectorSVG(text, name) {
       commitChange(snapshot());
       els = out; sel.clear(); H = Math.max(H, Math.ceil(bottom + 40)); fileName = null; fileHandle = null;
       cont.scrollTop = 0; applySize(); render(); setDirty(true);
+      resetPen();
       toast(`Tafelbild übernommen: ${out.length} Elemente (bearbeitbar)`, 2500);
     } else {
       insertAndSelect(out);
@@ -1834,6 +1837,7 @@ function loadText(text, name, handle) {
   if (b.fmt === 'portrait' || b.fmt === 'landscape') { pageFmt = b.fmt; setPageStyle(); syncPanel(); }
   fileName = name || null; fileHandle = handle || null;
   cont.scrollTop = 0; applySize(); render(); setDirty(false);
+  resetPen();
   toast('Geladen: ' + (name || 'Backup'));
 }
 
@@ -1919,7 +1923,8 @@ function showBackups() {
   });
   openDialog('dlgBackup');
 }
-setInterval(() => backup(false), 120000);
+var backupDue = false;                     // v9.9: Auto-Backup nie während der Texteingabe (serialize() würde das Textfeld schließen)
+setInterval(() => { if (editing) backupDue = true; else backup(false); }, 120000);
 document.addEventListener('visibilitychange', () => { if (document.hidden && dirty) backup(false); });
 window.addEventListener('beforeunload', e => { post({ type: 'bye' }); if (IS_MIRROR) return; if (dirty) { backup(false); e.preventDefault(); e.returnValue = ''; } });
 

@@ -1,4 +1,4 @@
-# TERBiBOARD (Version 9.8, Stand 2026-11-02)
+# TERBiBOARD (Version 9.9, Stand 2026-11-04)
 
 Eigenständiges Whiteboard nach dem Vorbild von Weitzboard, komplett neu geschrieben (kein Original-Code).
 © 2026 DocTERBi (TERBi Teaching) ☺ · freie Bildungsressource unter der **GNU General Public License v3.0** (`GPL-3.0-only`, siehe `LICENSE`).
@@ -25,12 +25,14 @@ Eigenständiges Whiteboard nach dem Vorbild von Weitzboard, komplett neu geschri
 ## Betrieb
 
 - **Als Website:** Ordner auf einen Webserver legen (z. B. GitHub Pages). Dann installierbar als App und offline nutzbar.
-- **Interaktive Tafeln mit Stift:** Chrome oder Edge verwenden. Messung (v9.8) an einer Tafel unter Windows: Firefox meldet die erste Stiftbewegung im Schnitt erst nach ca. 125 ms, Chrome nach ca. 55 ms – bei kleiner Schrift fehlen in Firefox sichtbar die Strichanfänge. Testseite: `Weitzboarder\Diagnose\stift-diagnose.html`.
+- **Interaktive Tafeln mit Stift:** Chrome oder Edge verwenden. Messung (v9.8) an einer interaktiven Tafel unter Windows: Firefox meldet die erste Stiftbewegung im Schnitt erst nach ca. 125 ms, Chrome nach ca. 55 ms – bei kleiner Schrift fehlen in Firefox sichtbar die Strichanfänge.
 - **SVG-Dateien per Doppelklick (ab v9.8):** Die installierte App trägt sich als Programm für `.svg` ein (Manifest `file_handlers`, Start über `launchQueue`). In Windows: Rechtsklick auf eine .svg → Öffnen mit → TERBiBOARD → „Immer diese App verwenden“.
 - **Lokal:** `index.html` per Doppelklick öffnen funktioniert ebenfalls, nur ohne Installation/Offline-Cache.
-- **Einzeldatei für Android/Tablets:** `Weitzboarder\Einzeldatei\TERBiBOARD.html` (identisch mit `Release\TERBiBOARD_Einzeldatei.html`) enthält alles in einer Datei (ca. 2 MB: Code, KaTeX, PDF.js, Logo, Handbuch). Auf dem Gerät in Chrome öffnen. Wird bei jeder neuen Version aus diesem Ordner neu erzeugt (kein Service Worker, nicht installierbar).
+- **Einzeldatei für Android/Tablets:** `TERBiBOARD_Einzeldatei.html` enthält alles in einer Datei (ca. 2 MB: Code, KaTeX, PDF.js, Logo, Handbuch). Auf dem Gerät in Chrome öffnen. Kein Service Worker, nicht installierbar.
+- **Eigene Kopie auf GitHub Pages:** Repository forken oder alle Dateien in ein eigenes Repository hochladen, dann Settings → Pages → *Deploy from a branch*, Branch `main`, Ordner `/ (root)`, Save. Nach 1–2 Minuten läuft das Board unter `https://BENUTZERNAME.github.io/REPONAME/`. Nach Updates im Browser Strg+F5.
+- **Für Entwickler:** Nach Änderungen an den Dateien in `sw.js` die `VERSION` hochzählen, damit installierte Apps aktualisieren.
 
-## Neu gegenüber dem Fork
+## Neu gegenüber Weitzboard
 
 - **Textebene:** Werkzeug *Text* (Taste T) – Klick setzt ein Textfeld, tippen oder Strg+V. Strg+V ohne aktives Textfeld legt Text aus der Zwischenablage als neues Textfeld ab (Bilder als Bild). Doppelklick im Auswahlmodus bearbeitet. Texte liegen immer über der Zeichnung, lassen sich auswählen, verschieben, skalieren, einfärben.
 - **Formeln:** `$…$` im Text, `$$…$$` abgesetzt; `\$` für ein normales Dollarzeichen.
@@ -68,7 +70,7 @@ Eigenständiges Whiteboard nach dem Vorbild von Weitzboard, komplett neu geschri
 - **Textfeld mit fester Breite:** Im Text-Werkzeug ein Feld *aufziehen* → die Breite bleibt fest, der Text bricht automatisch um (auch beim Einfügen aus der Zwischenablage). Ein einfacher Klick erzeugt wie bisher ein Feld ohne Umbruch. Bei einem einzeln ausgewählten Textfeld ändern die runden Seitengriffe links/rechts die Breite (auch nachträglich für Felder ohne feste Breite). Gespeichert als `data-tw`.
 - **Fremde SVG als Tafelbild:** Öffnen (O) oder Hineinziehen einer normalen SVG wandelt sie in echte, bearbeitbare Board-Elemente um: Linien/Pfade/Kreise/Rechtecke → Striche (Farbe und Strichstärke bleiben), `<text>` → Textfelder (mehrzeilig über `<tspan>`, `$…$` wird als Formel gesetzt), eingebettete PNG/JPEG → Bilder. Auf einem leeren Board füllt das Bild die volle Breite, sonst wird es eingefügt. Als unveränderliches Bild weiterhin über „Bild einfügen“ (P).
 
-### Regeln für SVGs, die als Tafelbild geöffnet werden sollen (z. B. von Claude erzeugt)
+### Regeln für SVGs, die als Tafelbild geöffnet werden sollen (z. B. von einer KI erzeugt)
 
 - `viewBox` setzen (Breite ca. 1200), weißer Hintergrund darf vorhanden sein (wird ignoriert).
 - Alles als Linien mit `stroke` zeichnen: `line`, `polyline`, `path`, `circle`, `ellipse`, `rect`; Farben bevorzugt aus der Board-Palette (#000000, #CC6677, #882255, #117733, #88CCEE, #332288, #999933, #DDCC77).
@@ -158,12 +160,61 @@ Eigenständiges Whiteboard nach dem Vorbild von Weitzboard, komplett neu geschri
 - **SVG-Dateien direkt öffnen:** `manifest.webmanifest` hat jetzt `file_handlers` für `image/svg+xml` (`.svg`, `launch_type: multiple-clients` = je Datei ein Fenster). `app.js` nimmt die Datei über `launchQueue` entgegen und lädt sie mit `loadText(text, name, handle)` – mit Dateizugriff, Strg+S speichert also in dieselbe Datei. Fremde SVGs werden wie bisher importiert (ohne Dateizugriff, kein Überschreiben). Bei ungespeicherten Änderungen wird nachgefragt; im zweiten Fenster (`#mirror`) passiert nichts.
 - Nur wirksam in der installierten App (Chrome/Edge, über https). Lokale `index.html` und Einzeldatei: unverändert.
 
+## Version 9.9 – Textfelder bleiben offen, Standard-Stiftstärke mittel
+
+- **Textfeld bleibt offen:** Das automatische Backup (alle 2 Minuten) hat bisher ein gerade bearbeitetes Textfeld abgeschlossen; weitere Tasten lösten dann Befehle aus (z. B. S = Stift, A = Auswahl). Jetzt wird das Auto-Backup verschoben, solange ein Textfeld offen ist, und direkt nach dem Abschließen des Felds nachgeholt. Manuelles Backup (Strg+B) und Backup beim Schließen unverändert.
+- **Standard-Stiftstärke mittel (3):** beim Start, bei „Neu“, beim Öffnen einer Datei oder eines Backups und wenn eine fremde SVG als Tafelbild übernommen wird. Ein eingeschalteter Textmarker wird dabei zurückgesetzt.
+
 ## Lizenz
 
 - TERBiBOARD ist freie Software unter der **GNU General Public License v3.0** (`GPL-3.0-only`): Jede und jeder darf das Board nutzen, kopieren, verändern und weitergeben. Bedingungen: Copyright- und Lizenzhinweise bleiben erhalten (Herkunft wird genannt), und veränderte Fassungen werden ebenfalls unter der GPL-3.0 mit Quelltext weitergegeben. Keine Gewährleistung.
 - **Ausgenommen:** Name und Logo „TERBi Teaching“ (`logo.png`, App-Icons) – wer eine veränderte Fassung verbreitet, ersetzt Logo und Namen.
 - Drittanbieter: KaTeX (MIT), PDF.js (Apache-2.0) – beide mit der GPL-3.0 vereinbar, Texte in `THIRD-PARTY-LICENSES.txt`.
 
+## Änderungsprotokoll
+
+- **v9.9 (2026-11-04):** Auto-Backup schließt kein offenes Textfeld mehr (wird verschoben und danach nachgeholt); Stiftstärke beim Start, bei „Neu“ und beim Öffnen immer „mittel“ (3). README ohne lokale Pfade und interne Arbeitsabläufe. Handbuch angepasst. Einzeldatei neu erzeugt.
+- **v9.8 (2026-11-02):** Hinweis „Chrome/Edge an interaktiven Tafeln“ (Handbuch, README); installierte App öffnet .svg-Dateien per Doppelklick/„Öffnen mit“ (`file_handlers` im Manifest, `launchQueue` in `app.js`). Einzeldatei neu erzeugt.
+- **v9.7 (2026-11-02):** Automatische Glättung der Striche abgeschaltet (Druckschrift in kleiner Größe wurde verrundet); Funktion `chaikin` bleibt im Code, wird aber nicht mehr aufgerufen. Einzeldatei neu erzeugt.
+- **v9.6 (2026-11-02):** HTML aus der Zwischenablage (Strg+Shift+V, Panel „Einfügen → HTML aus Zwischenablage“) und „Als Bild kopieren“ (Shift+C, Panel „Datei“; PNG in die Zwischenablage, sonst JPG-Download). Hilfe, Handbuch angepasst. Einzeldatei neu erzeugt.
+- **v9.5 (2026-11-02):** HTML-Seite einfügen: Panel „Einfügen → HTML-Seite“ bzw. Shift+I oder Datei hineinziehen; linke Hälfte, je Druckseite ein Abschnitt, als lebendes HTML (`<foreignObject>`) mit begrenztem CSS. Hilfe, Handbuch angepasst. Einzeldatei neu erzeugt.
+- **v9.4 (2026-10-29):** SVG-Code als Bild einfügen: Panel „Einfügen → SVG-Code als Bild“ bzw. Shift+P (Fenster mit Textfeld, ```svg-Zeilen erlaubt), reiner SVG-Code in der Zwischenablage wird mit Strg+V zum Bild. Hilfe, Handbuch angepasst. Einzeldatei neu erzeugt.
+- **v9.3 (2026-10-21):** Neue Boards mit fester Breite 1460; Zoom 50–200 % nur für die Anzeige (Panel, Strg+Mausrad, Strg++/−/0, Zwei-Finger-Zoom), waagerechtes Scrollen über 100 %. Hilfe, Handbuch angepasst. Einzeldatei neu erzeugt.
+- **v9.2 (2026-10-21):** Tastenkürzel S = Stift, A = Auswahl; Speichern nur noch Strg+S / Strg+Shift+S, „Für Druck anordnen“ auf N. Hilfe, Handbuch, Tooltips angepasst. Einzeldatei neu erzeugt.
+- **v9.1 (2026-10-21):** Textrahmen für Textfelder (Knopf ▢, Taste M; Rahmen in Schriftfarbe, blasser Hintergrund), auch nachträglich für ausgewählte Felder. Hilfe und Handbuch ergänzt. Einzeldatei neu erzeugt.
+- **v9.0 (2026-10-20):** Kleinere Dateien mit Bildern: Größenwahl beim Einfügen (Dialog bzw. feste Stufe), automatische Wahl JPEG/PNG, mehrfach verwendete Bilder nur einmal in der Datei, Knopf „Bilder verkleinern“, Qualitätswahl beim PDF-Import (Standard „Mittel“). Hilfe und Handbuch ergänzt. Einzeldatei neu erzeugt.
+- **v8.9 (2026-10-19):** Handbuch `handbuch.html` ergänzt und in der Hilfe verlinkt (auch in der Einzeldatei). Urheberangabe in allen Dateien auf „DocTERBi (TERBi Teaching)“ umgestellt. Dank an Prof. Dr. Edmund Weitz in README, Hilfe und Handbuch. Service Worker cacht das Handbuch. Einzeldatei neu erzeugt.
+- **v8.8 (2026-10-17):** Neuer Knopf „SVG-Code“ (Gruppe *Datei*): Fenster mit dem SVG-Code des Tafelbilds, wahlweise klein oder vollständig, mit Kopieren-Knopf; Eintrag in der Hilfe. Einzeldatei mitgezogen.
+- **v8.7 (2026-10-17):** Scrollen der beiden Fenster gekoppelt: beim Öffnen des zweiten Fensters automatisch an, wirkt in beide Richtungen (dieselbe Stelle oben links, auch bei unterschiedlicher Fenstergröße). Schalter heißt jetzt „Scrollen koppeln“ und gilt für beide Fenster gemeinsam; Rückkopplungsschutz gegen Hin-und-her-Scrollen.
+- **v8.6 (2026-10-17):** README-Funktionsteil auf den aktuellen Stand gebracht (Abschnitt „Version 8.2 – 8.6“, Dateiformat, Radierer, Taste F). Live-Text im zweiten Fenster: Während getippt wird, erscheint der Text im anderen Fenster sofort als Vorschau (Umbruch, Farbe, Größe, Formeln), höchstens ca. 10 kleine Nachrichten pro Sekunde. Die Vorschau gehört nicht zum gemeinsamen Stand und nicht zum Rückgängig-Verlauf; beim Abschließen ersetzt sie das fertige Textfeld. Wird nie mitgespeichert. Striche erscheinen weiterhin beim Absetzen.
+- **v8.5 (2026-10-17):** Taste **F** öffnet jetzt das zweite Fenster (Glätten nur noch über „Auswahl bearbeiten → Glätten“). Textmarker 50 % breiter (Stärke 9 statt 6); bereits gezeichnete Markierungen bleiben unverändert.
+- **v8.4 (2026-10-17):** Kein Stiftdruck mehr: Alle Stifte zeichnen in gleichmäßiger Breite, unabhängig vom Andruck. Bereits gezeichnete Striche behalten ihre Form.
+- **v8.3 (2026-10-17):** Stärke-Stufe 3 ist jetzt ein **Textmarker**: halbtransparent (45 %, multipliziert mit dem Untergrund, darunterliegende Schrift bleibt lesbar), gleichmäßige Breite ohne Druckabhängigkeit; Symbol im Menü als breiter, schräger, halbtransparenter Balken. Nur Stufe 3 betroffen; Stufen 1 und 2 sowie +/− unverändert. Wird mit der Datei gespeichert (`data-hl`).
+- **v8.2 (2026-10-17):** Schreiben deutlich flüssiger und formtreu: Striche werden beim Schreiben schon in ihrer endgültigen Form gespeichert (keine nachträgliche Ausdünnung mehr → die Form „springt“ nach dem Absetzen nicht mehr); Anzeige nur noch einmal pro Bildschirmbild, lange Striche in festen Abschnitten (Rechenzeit beim Schreiben ca. 80× geringer); vorhergesagte Stiftpunkte verringern die gefühlte Verzögerung.
+- **v8.1-E (2026-10-16):** Erste Einzeldatei-Fassung (PDF.js eingebettet, Worker im Hauptthread). Programmcode unverändert.
+- **v8.1 (2026-10-16):** Lizenz GPL-3.0 (Dateien `LICENSE`, `THIRD-PARTY-LICENSES.txt`, Lizenzköpfe in den Quelldateien, Impressum mit Logo im Hilfe-Fenster). Logo in der Startanimation und als App-Icon (192/512/maskable). Untertitel der Startanimation: „© TERBi Teaching ☺ · freie Bildungsressource (GPL-3.0)“.
+
+- **v8 (2026-10-16):** Menü neu strukturiert, Farbthema nach dem TERBi-Teaching-Logo, `logo.png` neu.
+
+- **v7.7 (2026-10-16):** Zwei Radierer: **Linienradierer** (D, Panel „Linienradierer“, Stift-Radiertaste) löscht nur Striche; **Objektradierer** (Shift+D, Panel „Objektradierer“) löscht nur Textfelder, Bilder und PDF-Seiten.
+- **v7.6 (2026-10-16):** Fix: Glättung rundet Ecken nur noch um max. ~1,5 Einheiten ab – Rechtecke, Pfeile und importierte Formen behalten scharfe Ecken (Handschrift bleibt glatt).
+- **v7.5 (2026-10-15):** Startanimation in Grün und Schwarz: „TERBi“ und Unterstreichung grün (#117733), „BOARD“ schwarz.
+- **v7.4 (2026-10-15):** Startanimation: Schriftzug bleibt nach dem Schreiben stehen, bis geklickt (oder eine Taste gedrückt) wird – höchstens 6 Sekunden.
+- **v7.3 (2026-10-15):** Startanimation: TERBiBOARD wird in Handschrift geschrieben und unterstrichen (ca. 2 s, reines CSS/SVG in `index.html`/`style.css`). Klick oder Taste überspringt (die Taste löst dabei keinen Befehl aus); im zweiten Fenster und beim Drucken nicht sichtbar; bei „Bewegung reduzieren“ nur kurz statisch.
+- **v7.2 (2026-10-15):** Standard-Strichstärke des Stifts 1,5 (vorher 3).
+- **v7.1 (2026-10-15):** Text-Werkzeug: auch der Finger zieht Textfelder auf (statt zu scrollen), deutlichere Vorschau beim Aufziehen. Service Worker lädt Dateien immer frisch vom Server (kein veralteter Browser-Cache).
+- **v7 (2026-10-15):** Textfelder mit fester Breite und Umbruch, Breite per Seitengriff änderbar; fremde SVGs werden als bearbeitbares Tafelbild übernommen.
+
+- **v6 (2026-10-15):** Zweites, live gekoppeltes Fenster mit „Ansicht folgen“.
+
+- **v5 (2026-10-15):** Umbenennung in **TERBiBOARD** (Titel, Panel, Hilfe, App-Name, Dateinamen `terbiboard_…svg`). Dateiformat, Einstellungen und Backups bleiben kompatibel.
+
+- **v4 (2026-10-15):** Für Druck anordnen, automatisches Neuanordnen beim Formatwechsel, feste Umbrüche.
+
+- **v3 (2026-10-15):** Seitenweiser Druck mit intelligenten Umbrüchen, Hoch-/Querformat, formatgerechter PDF-Import.
+
+- **v2 (2026-10-15):** Schreibgitter, PDF-Import.
+- **v1 (2026-10-15):** Erste Fassung (Neuentwicklung mit Textebene und Formeln).
 
 ## Dateiformat
 
