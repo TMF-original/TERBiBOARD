@@ -102,6 +102,9 @@
       <dt>Zoom</dt><dd>Zeile „Zoom“ im Panel (− / + / ↔), Strg+Mausrad, Strg+Plus / Strg+Minus, Strg+0 = 100 %; auf dem Tablet mit zwei Fingern. Nur die Anzeige wird größer oder kleiner – Datei und Druck bleiben unverändert. 100 % füllt die Fensterbreite. Neue Boards haben immer dieselbe Breite (1460), ältere behalten ihre.</dd>
       <dt>Text ziehen</dt><dd>Im Text-Werkzeug ein Feld aufziehen: feste Breite, der Text bricht automatisch um. Bei ausgewähltem Textfeld ändern die runden Seitengriffe die Breite.</dd>
       <dt>J</dt><dd>JavaScript-Rechner</dd>
+      <dt>W</dt><dd>Zufallszahl ziehen (Bereich 0–40, wahlweise ohne Wiederholung), Panel „Extras → Zufallszahl“</dd>
+      <dt>Shift+G</dt><dd>Gruppen bilden: Zahlen 1 bis Kinderzahl zufällig auf Gruppen fester Größe verteilen, übrige Zahlen kommen in die Restgruppe</dd>
+      <dt>Shift+T</dt><dd>Countdown-Timer: läuft weiter, wenn der Dialog zu ist (kleine Anzeige oben rechts, Klick öffnet ihn wieder); am Ende Blinken und Gong (abschaltbar)</dd>
       <dt>SVG-Code</dt><dd>Panel „Datei → SVG-Code“: zeigt den Code des Tafelbilds zum Ansehen und Kopieren (klein oder vollständig bearbeitbar)</dd>
       <dt>B</dt><dd>Backups anzeigen (Strg+B: Backup jetzt)</dd>
       <dt>Esc / Q</dt><dd>Schließen / Beenden</dd>
@@ -135,6 +138,50 @@
     <p class="small">Alle Funktionen aus <code>Math</code> direkt nutzbar (sin, PI, sqrt …).</p>
   </div>
 </div>
+
+<div id="dlgRand" class="dlg">
+  <div class="dlg-head">Zufallszahl <button class="x">×</button></div>
+  <div class="dlg-body tool">
+    <div class="row tool-row">
+      <label>von <input id="randFrom" type="number" min="0" max="40" value="1"></label>
+      <label>bis <input id="randTo" type="number" min="0" max="40" value="25"></label>
+      <label class="chk"><input id="randNoRep" type="checkbox"> ohne Wiederholung</label>
+    </div>
+    <div id="randOut" class="big-out">–</div>
+    <div class="row"><button id="randGo" class="primary">Ziehen (Enter)</button><button id="randReset">Zurücksetzen</button><button id="randInsert">Als Text einfügen</button></div>
+    <p id="randInfo" class="small"></p>
+  </div>
+</div>
+
+<div id="dlgGroups" class="dlg">
+  <div class="dlg-head">Gruppen bilden <button class="x">×</button></div>
+  <div class="dlg-body tool">
+    <div class="row tool-row">
+      <label>Kinder <input id="grpKids" type="number" min="1" max="40" value="23"></label>
+      <label>Gruppen <input id="grpCount" type="number" min="1" max="40" value="4"></label>
+      <label>à <input id="grpSize" type="number" min="1" max="40" value="5"></label>
+    </div>
+    <p id="grpInfo" class="small"></p>
+    <div class="row"><button id="grpGo" class="primary">Gruppen bilden / neu mischen</button><button id="grpInsert">Als Text einfügen</button></div>
+    <div id="grpOut" class="tgrp-out"></div>
+  </div>
+</div>
+
+<div id="dlgTimer" class="dlg">
+  <div class="dlg-head">Countdown-Timer <button class="x">×</button></div>
+  <div class="dlg-body tool">
+    <div id="tmrOut" class="big-out">05:00</div>
+    <div class="row tool-row">
+      <label><input id="tmrMin" type="number" min="0" max="99" value="5"> Min.</label>
+      <label><input id="tmrSec" type="number" min="0" max="59" value="0"> Sek.</label>
+      <span id="tmrPresets" class="row"><button data-min="1">1 Min.</button><button data-min="3">3 Min.</button><button data-min="5">5 Min.</button><button data-min="10">10 Min.</button></span>
+    </div>
+    <div class="row"><button id="tmrStart" class="primary">Start</button><button id="tmrReset">Zurücksetzen</button>
+      <label class="chk"><input id="tmrSound" type="checkbox" checked> Ton am Ende</label></div>
+    <p class="small">Der Timer läuft weiter, wenn dieses Fenster geschlossen wird – oben rechts bleibt eine kleine Anzeige stehen (Klick öffnet es wieder).</p>
+  </div>
+</div>
+<div id="timerMini" title="Timer öffnen">⏱ <span>05:00</span></div>
 
 <div id="dlgSvg" class="dlg wide">
   <div class="dlg-head">SVG-Code des Tafelbilds <button class="x">×</button></div>

@@ -153,10 +153,28 @@ textarea.wbedit{position:absolute;left:0;top:0;margin:0;border:1px dashed #18623
 #board .page-label{fill:#b8b8b8;font:11px system-ui,sans-serif}
 #board .page-line.forced{stroke:#d9534f;stroke-dasharray:10 4;stroke-width:1.6}
 #board .page-label.forced{fill:#d9534f}
+/* v10.0: Zufallszahl, Gruppen, Timer */
+.tool-row{align-items:center;margin:4px 0 8px}.tool-row label{display:inline-flex;align-items:center;gap:4px}
+.tool-row input[type=number]{width:4.2em;font-size:16px;padding:3px 4px}
+.tool .row button{padding:5px 10px;cursor:pointer}.tool .row .primary{background:#186238;color:#fff;border:1px solid #0f4a29;border-radius:4px}
+.tool .chk{display:inline-flex;align-items:center;gap:4px;font-size:13px}
+.big-out{font:700 96px/1.1 system-ui,"Segoe UI",Arial,sans-serif;font-variant-numeric:tabular-nums;text-align:center;color:#186238;
+  border:1px solid #3cb371;border-radius:8px;background:#fff;margin:6px 0 10px;padding:6px 0}
+.big-out.rolling{color:#9bb3a4}
+.tgrp-out{display:grid;gap:4px;margin:8px 0 0}
+.tgrp{display:flex;gap:10px;padding:4px 8px;background:#fff;border:1px solid #c9dfb2;border-radius:6px;font-size:18px}
+.tgrp b{min-width:6.5em;color:#186238}.tgrp.rest b{color:#a15c00}
+#timerMini{position:fixed;top:10px;right:14px;z-index:35;display:none;font:700 28px system-ui,"Segoe UI",Arial,sans-serif;font-variant-numeric:tabular-nums;
+  color:#186238;background:#f7fbf2;border:2px solid #186238;border-radius:10px;padding:4px 12px;cursor:pointer;user-select:none;box-shadow:0 3px 12px rgba(0,0,0,.25)}
+#timerMini.show{display:block}
+#tmrOut.paused,#timerMini.paused{color:#777}
+#tmrOut.done,#timerMini.done{color:#b3261e;border-color:#b3261e}
+.tb-blink{animation:tbBlink .5s steps(1) infinite}
+@keyframes tbBlink{50%{background:#b3261e;color:#fff}}
 #printArea{display:none}
 @media print{
   html,body{height:auto;overflow:visible;background:#fff;display:block}
-  #panel,#toast,.dlg,#container{display:none!important}
+  #panel,#toast,.dlg,#container,#timerMini{display:none!important}
   #printArea{display:block}
   #printArea .pp{break-after:page;page-break-after:always;break-inside:avoid;overflow:hidden}
   #printArea .pp:last-child{break-after:auto;page-break-after:auto}

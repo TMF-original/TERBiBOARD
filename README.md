@@ -1,4 +1,4 @@
-# TERBiBOARD (Version 9.9, Stand 2026-11-04)
+# TERBiBOARD (Version 10.0, Stand 2026-11-25)
 
 Eigenständiges Whiteboard nach dem Vorbild von Weitzboard, komplett neu geschrieben (kein Original-Code).
 © 2026 DocTERBi (TERBi Teaching) ☺ · freie Bildungsressource unter der **GNU General Public License v3.0** (`GPL-3.0-only`, siehe `LICENSE`).
@@ -165,6 +165,16 @@ Eigenständiges Whiteboard nach dem Vorbild von Weitzboard, komplett neu geschri
 - **Textfeld bleibt offen:** Das automatische Backup (alle 2 Minuten) hat bisher ein gerade bearbeitetes Textfeld abgeschlossen; weitere Tasten lösten dann Befehle aus (z. B. S = Stift, A = Auswahl). Jetzt wird das Auto-Backup verschoben, solange ein Textfeld offen ist, und direkt nach dem Abschließen des Felds nachgeholt. Manuelles Backup (Strg+B) und Backup beim Schließen unverändert.
 - **Standard-Stiftstärke mittel (3):** beim Start, bei „Neu“, beim Öffnen einer Datei oder eines Backups und wenn eine fremde SVG als Tafelbild übernommen wird. Ein eingeschalteter Textmarker wird dabei zurückgesetzt.
 
+## Version 10.0 – Zufallszahl, Gruppen bilden, Countdown-Timer
+
+Drei Unterrichtswerkzeuge als verschiebbare Dialoge (wie der Rechner), Panel „Extras“:
+
+- **Zufallszahl (W):** Bereich von–bis zwischen 0 und 40, großes Ergebnis mit kurzer „Würfel“-Animation. Schalter „ohne Wiederholung“: jede Zahl kommt erst wieder, wenn alle dran waren (Liste der gezogenen Zahlen, „Zurücksetzen“). „Als Text einfügen“ setzt die Zahl als Textfeld aufs Board.
+- **Gruppen bilden (Shift+G):** Kinderzahl (bis 40), Anzahl und Größe der Gruppen. Die Zahlen 1 … Kinderzahl werden gemischt und verteilt, übrige Zahlen bilden die Restgruppe. Passen die Gruppen nicht in die Kinderzahl, erscheint nur ein Hinweis (keine Verteilung). Ergebnis auch als Textfeld einfügbar (eine Zeile je Gruppe).
+- **Countdown-Timer (Shift+T):** Minuten/Sekunden oder Schnellwahl 1/3/5/10 Min., Start/Pause/Weiter, Zurücksetzen. Läuft nach dem Schließen des Dialogs weiter; dann zeigt eine kleine Anzeige oben rechts die Restzeit (Klick öffnet den Dialog). Am Ende 15 s rotes Blinken und ein Gong (Web Audio, keine Audiodatei; abschaltbar). Die Zeit wird über die Uhr berechnet, nicht über gezählte Intervalle.
+- Zufallszahlen über `crypto.getRandomValues` (gleichverteilt). Die Einstellungen werden im Browser gemerkt (`localStorage`, Schlüssel `terbiboard.rand`, `.groups`, `.timer`). Die Dialoge bleiben wie der Rechner offen, wenn auf dem Board geschrieben wird.
+- Tasten: W war frei; G und T behalten ihre Funktion (Gitter, Text), nur mit Shift öffnen sie Gruppen bzw. Timer.
+
 ## Lizenz
 
 - TERBiBOARD ist freie Software unter der **GNU General Public License v3.0** (`GPL-3.0-only`): Jede und jeder darf das Board nutzen, kopieren, verändern und weitergeben. Bedingungen: Copyright- und Lizenzhinweise bleiben erhalten (Herkunft wird genannt), und veränderte Fassungen werden ebenfalls unter der GPL-3.0 mit Quelltext weitergegeben. Keine Gewährleistung.
@@ -173,6 +183,7 @@ Eigenständiges Whiteboard nach dem Vorbild von Weitzboard, komplett neu geschri
 
 ## Änderungsprotokoll
 
+- **v10.0 (2026-11-25):** Neue Werkzeuge Zufallszahl (W), Gruppen bilden (Shift+G) und Countdown-Timer (Shift+T) mit Mini-Anzeige; Panel „Extras“, Hilfe und Handbuch (neuer Abschnitt 11) ergänzt. Einzeldatei neu erzeugt.
 - **v9.9 (2026-11-04):** Auto-Backup schließt kein offenes Textfeld mehr (wird verschoben und danach nachgeholt); Stiftstärke beim Start, bei „Neu“ und beim Öffnen immer „mittel“ (3). README ohne lokale Pfade und interne Arbeitsabläufe. Handbuch angepasst. Einzeldatei neu erzeugt.
 - **v9.8 (2026-11-02):** Hinweis „Chrome/Edge an interaktiven Tafeln“ (Handbuch, README); installierte App öffnet .svg-Dateien per Doppelklick/„Öffnen mit“ (`file_handlers` im Manifest, `launchQueue` in `app.js`). Einzeldatei neu erzeugt.
 - **v9.7 (2026-11-02):** Automatische Glättung der Striche abgeschaltet (Druckschrift in kleiner Größe wurde verrundet); Funktion `chaikin` bleibt im Code, wird aber nicht mehr aufgerufen. Einzeldatei neu erzeugt.

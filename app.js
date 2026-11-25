@@ -18,7 +18,7 @@
 
 // ===================================================================== Grundlagen
 const NS = 'http://www.w3.org/2000/svg', XH = 'http://www.w3.org/1999/xhtml';
-const VERSION = '2026-11-04';
+const VERSION = '2026-11-25';
 const COLORS = ['#FFFFFF','#000000','#DDDDDD','#CC6677','#882255','#117733','#88CCEE','#332288','#999933','#DDCC77'];
 const TEXT_FONT = 'system-ui,"Segoe UI",Arial,sans-serif';
 const $ = id => document.getElementById(id);
@@ -1295,6 +1295,7 @@ const ACTIONS = {
     if (followView) sendView();
   },
   calc: () => openDialog('dlgCalc'), help: () => toggleDialog('dlgHelp'),
+  rand: () => openDialog('dlgRand'), groups: () => openDialog('dlgGroups'), timer: () => openDialog('dlgTimer'),   // v10.0
 };
 // ---- Panel-Aufbau: Kopf (Logo, Speichern/Öffnen) · Werkzeug-Kacheln · Farbe/Stärke/Schrift ·
 //      Rückgängig-Zeile · aufklappbare Gruppen (Zustand wird gemerkt)
@@ -1313,12 +1314,12 @@ const GROUPS = [
   ['file', 'Datei', [['newb', '✦', 'Neu'], ['saveAs', '⇲', 'Speichern unter'], ['compact', '⇩', 'Export klein'], ['svgcode', '&lt;/&gt;', 'SVG-Code'], ['copyimg', '📷', 'Als Bild kopieren'],
       ['backups', '🕘', 'Backups'], ['backupNow', '⟳', 'Backup jetzt']]],
   ['extra', 'Extras', [['mirror', '⧉', 'Zweites Fenster'], ['follow', '⇵', 'Scrollen koppeln'], ['finger', '☝', 'Finger zeichnet'],
-      ['calc', '∑', 'Rechner'], ['help', '?', 'Hilfe']]],
+      ['calc', '∑', 'Rechner'], ['rand', '🎲', 'Zufallszahl'], ['groups', '👥', 'Gruppen bilden'], ['timer', '⏱', 'Timer'], ['help', '?', 'Hilfe']]],
 ];
 const KEYHINT = { draw: 'S', select: 'A', text: 'T', erase: 'D', erase2: 'Shift+D', undo: 'Z', redo: 'Y', del: 'Rücktaste', copy: 'C', cut: 'X',
   paste: 'Strg+V', all: 'Strg+A', straight: 'H', arc: 'K', mirror: 'F', rotR: 'R', rotL: 'L', thicker: '+', thinner: '−', extend: 'E',
   clip: 'Strg+E', image: 'P', svgin: 'Shift+P', grid: 'G', pdf: 'I', html: 'Shift+I', htmlclip: 'Strg+Shift+V', copyimg: 'Shift+C', arrange: 'N', pbreak: 'U', print: 'Strg+P', open: 'O', save: 'Strg+S', saveAs: 'Strg+Shift+S', backups: 'B',
-  backupNow: 'Strg+B', calc: 'J', help: 'F1', fontUp: 'Schrift größer', fontDown: 'Schrift kleiner', frame: 'M', zoomIn: 'Strg++', zoomOut: 'Strg+−', zoomFit: 'Strg+0' };
+  backupNow: 'Strg+B', calc: 'J', rand: 'W', groups: 'Shift+G', timer: 'Shift+T', help: 'F1', fontUp: 'Schrift größer', fontDown: 'Schrift kleiner', frame: 'M', zoomIn: 'Strg++', zoomOut: 'Strg+−', zoomFit: 'Strg+0' };
 
 let hlMode = false;                        // Stufe 3 = Textmarker
 function resetPen() { strokeW = 3; hlMode = false; syncPanel(); }   // v9.9: Start/Neu/Öffnen -> mittlere Stärke
@@ -1473,7 +1474,7 @@ document.addEventListener('keydown', e => {
   } else if (/^[0-9]$/.test(k)) setColor(COLORS[+k]);
   else switch (lk) {
     case ' ': ACTIONS.toggle(); break;
-    case 't': setMode('text'); break;
+    case 't': if (e.shiftKey) toggleDialog('dlgTimer'); else setMode('text'); break;   // v10.0: Shift+T = Timer
     case 'm': toggleFrame(); break;
     case 'd': case 'D': { const m = e.shiftKey ? 'erase2' : 'erase'; setMode(mode === m ? 'draw' : m); break; }
     case 'z': undo(); break;
@@ -1486,7 +1487,7 @@ document.addEventListener('keydown', e => {
     case 'Backspace': case 'Delete': deleteSel(); break;
     case 'e': ACTIONS.extend(); break;
     case 'p': if (e.shiftKey) openSvgIn(); else $('imgInput').click(); break;   // v9.4: Shift+P = SVG-Code
-    case 'g': cycleGrid(); break;
+    case 'g': if (e.shiftKey) toggleDialog('dlgGroups'); else cycleGrid(); break;   // v10.0: Shift+G = Gruppen
     case 'a': setMode('select'); break;            // v9.2: A = Auswahl
     case 'n': arrangeForPrint(); break;            // v9.2: N = für Druck anordnen (vorher A)
     case 'u': ACTIONS.pbreak(); break;
@@ -1499,6 +1500,7 @@ document.addEventListener('keydown', e => {
     case '+': bigger(1.25); break;
     case '-': bigger(.8); break;
     case 'j': toggleDialog('dlgCalc'); break;
+    case 'w': toggleDialog('dlgRand'); break;      // v10.0: W = Zufallszahl
     case 'b': toggleDialog('dlgBackup', showBackups); break;
     case 'q': quit(); break;
     case 'F1': toggleDialog('dlgHelp'); break;
@@ -1929,11 +1931,13 @@ document.addEventListener('visibilitychange', () => { if (document.hidden && dir
 window.addEventListener('beforeunload', e => { post({ type: 'bye' }); if (IS_MIRROR) return; if (dirty) { backup(false); e.preventDefault(); e.returnValue = ''; } });
 
 // ===================================================================== Dialoge & Rechner
-function openDialog(id) { const d = $(id); d.classList.add('open'); if (id === 'dlgCalc') setTimeout(() => $('calcIn').focus(), 0); }
+const DLG_FOCUS = { dlgCalc: 'calcIn', dlgRand: 'randGo', dlgGroups: 'grpGo', dlgTimer: 'tmrStart' };   // v10.0
+const DLG_KEEP = ['dlgCalc', 'dlgRand', 'dlgGroups', 'dlgTimer'];   // bleiben beim Schreiben auf dem Board offen
+function openDialog(id) { const d = $(id); d.classList.add('open'); const f = DLG_FOCUS[id]; if (f) setTimeout(() => $(f).focus(), 0); }
 function toggleDialog(id, opener) { const d = $(id); if (d.classList.contains('open')) d.classList.remove('open'); else (opener || (() => openDialog(id)))(); }
 function closeDialogs(onlyHelp) {
   let any = false;
-  document.querySelectorAll('.dlg.open').forEach(d => { if (!onlyHelp || d.id !== 'dlgCalc') { d.classList.remove('open'); any = true; } });
+  document.querySelectorAll('.dlg.open').forEach(d => { if (!onlyHelp || !DLG_KEEP.includes(d.id)) { d.classList.remove('open'); any = true; } });
   return any;
 }
 document.querySelectorAll('.dlg').forEach(d => {
@@ -1961,6 +1965,177 @@ function runCalc() {
 $('calcRun').addEventListener('click', runCalc);
 $('calcInsert').addEventListener('click', () => { if (calcResult === null) runCalc(); if (calcResult !== null) insertText(calcResult); });
 $('calcIn').addEventListener('keydown', e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); runCalc(); } });
+
+// ===================================================================== v10.0: Zufallszahl, Gruppen, Timer
+const RND_MAX = 40;
+function rndInt(n) {                                  // gleichverteilt 0 … n-1 (crypto, ohne Modulo-Verzerrung)
+  if (window.crypto && crypto.getRandomValues) {
+    const a = new Uint32Array(1), lim = Math.floor(4294967296 / n) * n; let v;
+    do { crypto.getRandomValues(a); v = a[0]; } while (v >= lim);
+    return v % n;
+  }
+  return Math.floor(Math.random() * n);
+}
+function shuffleArr(a) { for (let i = a.length - 1; i > 0; i--) { const j = rndInt(i + 1); [a[i], a[j]] = [a[j], a[i]]; } return a; }
+function clampInt(el, lo, hi, def, write = true) {
+  let v = parseInt(el.value, 10); if (!Number.isFinite(v)) v = def;
+  v = Math.min(hi, Math.max(lo, v)); if (write) el.value = v; return v;
+}
+function lsGet(k, d) { try { const v = localStorage.getItem('terbiboard.' + k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } }
+function lsSet(k, v) { try { localStorage.setItem('terbiboard.' + k, JSON.stringify(v)); } catch (e) { /* egal */ } }
+
+// ---- Zufallszahl (W): Bereich 0–40, wahlweise ohne Wiederholung
+const rnd = { pool: null, key: '', drawn: [], last: null, rolling: false };
+(() => { const s = lsGet('rand', null); if (s) { $('randFrom').value = s.a; $('randTo').value = s.b; $('randNoRep').checked = !!s.nr; } })();
+function rndRange() {
+  let a = clampInt($('randFrom'), 0, RND_MAX, 1), b = clampInt($('randTo'), 0, RND_MAX, 25);
+  if (a > b) { [a, b] = [b, a]; $('randFrom').value = a; $('randTo').value = b; }
+  lsSet('rand', { a, b, nr: $('randNoRep').checked });
+  return [a, b];
+}
+function rndInfo(note = '') {
+  const info = $('randInfo');
+  if (!$('randNoRep').checked) { info.textContent = note; return; }
+  const [a, b] = rndRange(), total = b - a + 1;
+  info.textContent = note + (rnd.drawn.length ? `Gezogen: ${rnd.drawn.join(', ')} · noch ${total - rnd.drawn.length} von ${total}`
+                                              : `Noch keine Zahl gezogen (${total} im Topf)`);
+}
+function rndReset() { rnd.pool = null; rnd.drawn = []; rnd.key = ''; rndInfo(); }
+function rndDraw() {
+  if (rnd.rolling) return;
+  const [a, b] = rndRange(), key = a + '-' + b;
+  let v, note = '';
+  if ($('randNoRep').checked) {
+    if (rnd.key !== key) { rnd.key = key; rnd.pool = null; rnd.drawn = []; }
+    if (!rnd.pool || !rnd.pool.length) {
+      if (rnd.pool) note = 'Alle Zahlen waren dran – neue Runde. ';
+      rnd.pool = []; for (let i = a; i <= b; i++) rnd.pool.push(i);
+      rnd.drawn = [];
+    }
+    v = rnd.pool.splice(rndInt(rnd.pool.length), 1)[0]; rnd.drawn.push(v);
+  } else v = a + rndInt(b - a + 1);
+  const out = $('randOut'); let n = 0;                // kurzes „Würfeln“, dann die gezogene Zahl
+  rnd.rolling = true; out.classList.add('rolling');
+  const tick = () => {
+    if (++n < 9 && b > a) { out.textContent = a + rndInt(b - a + 1); setTimeout(tick, 45); return; }
+    out.textContent = v; out.classList.remove('rolling'); rnd.rolling = false; rnd.last = v; rndInfo(note);
+  };
+  tick();
+}
+$('randGo').addEventListener('click', rndDraw);
+$('randReset').addEventListener('click', () => { rndReset(); rnd.last = null; $('randOut').textContent = '–'; });
+$('randInsert').addEventListener('click', () => { if (rnd.last !== null) insertText(String(rnd.last)); else toast('Erst eine Zahl ziehen'); });
+['randFrom', 'randTo'].forEach(id => {
+  $(id).addEventListener('change', rndReset);
+  $(id).addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); rndDraw(); } });
+});
+$('randNoRep').addEventListener('change', rndReset);
+rndInfo();
+
+// ---- Gruppen bilden (Shift+G): Zahlen 1 … Kinderzahl zufällig auf Gruppen fester Größe, Rest = Restgruppe
+let grpText = '';
+(() => { const s = lsGet('groups', null); if (s) { $('grpKids').value = s.n; $('grpCount').value = s.g; $('grpSize').value = s.s; } })();
+function grpCheck(write = true) {
+  const n = clampInt($('grpKids'), 1, RND_MAX, 23, write), g = clampInt($('grpCount'), 1, RND_MAX, 4, write),
+        s = clampInt($('grpSize'), 1, RND_MAX, 5, write), used = g * s, info = $('grpInfo');
+  if (write) lsSet('groups', { n, g, s });
+  if (used > n) {
+    const mx = Math.floor(n / s), r = n - mx * s;
+    info.textContent = mx < 1 ? `Nur ${n} Kinder – Gruppen à ${s} sind nicht möglich.`
+      : `Nur ${n} Kinder – mit Gruppen à ${s} gehen höchstens ${mx} Gruppe${mx === 1 ? '' : 'n'}${r ? ` + Restgruppe (${r})` : ''}.`;
+    info.classList.add('err'); return null;
+  }
+  info.classList.remove('err');
+  info.textContent = `${g} × ${s} = ${used}` + (n > used ? ` · Restgruppe: ${n - used}` : ' · keine Restgruppe');
+  return { n, g, s };
+}
+function grpMake() {
+  const v = grpCheck(), out = $('grpOut');
+  grpText = ''; out.innerHTML = '';
+  if (!v) return;
+  const nums = shuffleArr(Array.from({ length: v.n }, (_, i) => i + 1)), rows = [];
+  for (let i = 0; i < v.g; i++) rows.push([`Gruppe ${i + 1}`, nums.slice(i * v.s, (i + 1) * v.s).sort((x, y) => x - y), false]);
+  const rest = nums.slice(v.g * v.s).sort((x, y) => x - y);
+  if (rest.length) rows.push(['Restgruppe', rest, true]);
+  out.innerHTML = rows.map(([h, l, r]) => `<div class="tgrp${r ? ' rest' : ''}"><b>${h}</b><span>${l.join(', ')}</span></div>`).join('');
+  grpText = rows.map(([h, l]) => `${h}: ${l.join(', ')}`).join('\n');
+}
+['grpKids', 'grpCount', 'grpSize'].forEach(id => {
+  $(id).addEventListener('input', () => grpCheck(false));
+  $(id).addEventListener('change', () => grpCheck());
+  $(id).addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); grpMake(); } });
+});
+$('grpGo').addEventListener('click', grpMake);
+$('grpInsert').addEventListener('click', () => { if (!grpText) grpMake(); if (grpText) insertText(grpText); });
+grpCheck();
+
+// ---- Countdown-Timer (Shift+T): läuft weiter, wenn der Dialog zu ist (kleine Anzeige oben rechts)
+const tmr = { total: 300, left: 300, end: 0, run: false, done: false, iv: 0, ac: null, blinkT: 0 };
+function tmrFmt(sec) { sec = Math.max(0, Math.ceil(sec - 1e-6)); return String(Math.floor(sec / 60)).padStart(2, '0') + ':' + String(sec % 60).padStart(2, '0'); }
+function tmrSave() { lsSet('timer', { m: $('tmrMin').value, s: $('tmrSec').value, snd: $('tmrSound').checked }); }
+function tmrSetFromInputs() {
+  if (tmr.run) return;
+  const m = clampInt($('tmrMin'), 0, 99, 5), s = clampInt($('tmrSec'), 0, 59, 0);
+  tmr.total = tmr.left = m * 60 + s; tmr.done = false; tmr.blinkT = 0;
+  tmrSave(); tmrShow();
+}
+function tmrShow() {
+  const t = tmrFmt(tmr.left), big = $('tmrOut'), mini = $('timerMini'), blink = tmr.done && Date.now() < tmr.blinkT;
+  const paused = !tmr.run && !tmr.done && tmr.left < tmr.total;
+  big.textContent = t; mini.querySelector('span').textContent = t;
+  [big, mini].forEach(el => { el.classList.toggle('done', tmr.done); el.classList.toggle('tb-blink', blink); el.classList.toggle('paused', paused); });
+  $('tmrStart').textContent = tmr.run ? 'Pause' : (paused ? 'Weiter' : 'Start');
+  mini.classList.toggle('show', (tmr.run || tmr.done || paused) && !$('dlgTimer').classList.contains('open'));
+}
+function tmrAudio() {
+  try {
+    if (!tmr.ac) tmr.ac = new (window.AudioContext || window.webkitAudioContext)();
+    if (tmr.ac.state === 'suspended') tmr.ac.resume();
+  } catch (e) { tmr.ac = null; }
+  return tmr.ac;
+}
+function tmrGong() {                                  // drei weiche Töne, ohne Audiodatei
+  const ac = tmrAudio(); if (!ac) return;
+  const t0 = ac.currentTime + .05;
+  [[0, 880], [.45, 880], [.9, 660]].forEach(([d, f]) => {
+    const o = ac.createOscillator(), g = ac.createGain();
+    o.type = 'sine'; o.frequency.value = f;
+    g.gain.setValueAtTime(.0001, t0 + d); g.gain.exponentialRampToValueAtTime(.4, t0 + d + .02); g.gain.exponentialRampToValueAtTime(.0001, t0 + d + 1.2);
+    o.connect(g); g.connect(ac.destination); o.start(t0 + d); o.stop(t0 + d + 1.25);
+  });
+}
+function tmrTick() {
+  tmr.left = (tmr.end - Date.now()) / 1000;
+  if (tmr.left <= 0) {
+    tmr.left = 0; tmr.run = false; tmr.done = true; clearInterval(tmr.iv);
+    tmr.blinkT = Date.now() + 15000; setTimeout(tmrShow, 15100);   // 15 s blinken, danach bleibt 00:00 rot stehen
+    if ($('tmrSound').checked) tmrGong();
+  }
+  tmrShow();
+}
+function tmrStartPause() {
+  if (tmr.run) { tmr.left = Math.max(0, (tmr.end - Date.now()) / 1000); tmr.run = false; clearInterval(tmr.iv); tmrShow(); return; }
+  if (tmr.done || tmr.left <= 0) tmrSetFromInputs();
+  if (tmr.left <= 0) { toast('Bitte eine Zeit eingeben'); return; }
+  tmrAudio();                                         // Ton im Klick freischalten (Autoplay-Regeln der Browser)
+  tmr.end = Date.now() + tmr.left * 1000; tmr.run = true;
+  clearInterval(tmr.iv); tmr.iv = setInterval(tmrTick, 200); tmrShow();
+}
+function tmrReset() { tmr.run = false; clearInterval(tmr.iv); tmrSetFromInputs(); }
+(() => { const s = lsGet('timer', null); if (s) { $('tmrMin').value = s.m; $('tmrSec').value = s.s; $('tmrSound').checked = s.snd !== false; } })();
+$('tmrStart').addEventListener('click', tmrStartPause);
+$('tmrReset').addEventListener('click', tmrReset);
+$('tmrSound').addEventListener('change', tmrSave);
+['tmrMin', 'tmrSec'].forEach(id => {
+  $(id).addEventListener('change', tmrSetFromInputs);
+  $(id).addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); if (!tmr.run) { tmrSetFromInputs(); tmrStartPause(); } } });
+});
+document.querySelectorAll('#tmrPresets button').forEach(b => b.addEventListener('click', () => {
+  $('tmrMin').value = b.dataset.min; $('tmrSec').value = 0; tmrReset();
+}));
+$('timerMini').addEventListener('click', () => openDialog('dlgTimer'));
+new MutationObserver(tmrShow).observe($('dlgTimer'), { attributes: true, attributeFilter: ['class'] });
+tmrSetFromInputs();
 
 // ---- SVG-Code anzeigen (v8.8): derselbe Inhalt wie „Export klein“ bzw. „Speichern“, als Text zum Kopieren
 const SVG_SHOW_MAX = 1.5e6;                      // längere Codes nur gekürzt anzeigen – „Kopieren“ liefert immer alles
